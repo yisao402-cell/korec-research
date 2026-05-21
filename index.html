@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOREC 初回商談前リサーチ</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@11/marked.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #f5f5f7;
+    color: #1d1d1f;
+    line-height: 1.6;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: #6e6e73; font-size: 13px; margin-bottom: 24px; }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  details.card > summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6e6e73;
+    list-style: none;
+  }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::before { content: '▸ '; }
+  details.card[open] > summary::before { content: '▾ '; }
+  details.card[open] > summary { margin-bottom: 12px; }
+
+  .input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: #6e6e73;
+    margin-bottom: 4px;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+  input[type=text], input[type=password], select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fbfbfd;
+    font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: #0071e3; background: white; }
+  .span-2 { grid-column: span 2; }
+  .hint {
+    font-size: 11px;
+    color: #86868b;
+    margin-top: 4px;
+  }
+  .hint a { color: #0071e3; }
+
+  button {
+    background: #0071e3;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+    font-family: inherit;
+  }
+  button:hover:not(:disabled) { background: #0077ed; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: white;
+    color: #0071e3;
+    border: 1px solid #d2d2d7;
+  }
+  button.secondary:hover:not(:disabled) { background: #f5f5f7; }
+  button.small {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+
+  .actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+  .prompt-title { font-size: 15px; font-weight: 600; }
+  .prompt-meta { color: #6e6e73; font-size: 12px; margin-top: 2px; }
+
+  .status {
+    font-size: 12px;
+    color: #86868b;
+    margin: 8px 0;
+    min-height: 18px;
+  }
+  .status.error { color: #ff3b30; }
+  .status.success { color: #34c759; }
+
+  .result {
+    background: #fbfbfd;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+  .result:empty { display: none; }
+  .result h1, .result h2, .result h3 { font-size: 14px; margin: 12px 0 6px; }
+  .result h2 { font-size: 15px; }
+  .result ul, .result ol { padding-left: 20px; margin: 6px 0; }
+  .result li { margin: 3px 0; }
+  .result a { color: #0071e3; word-break: break-all; }
+  .result p { margin: 6px 0; }
+  .result hr { border: none; border-top: 1px solid #e5e5ea; margin: 12px 0; }
+  .result code {
+    background: #f5f5f7;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #d2d2d7;
+    border-top-color: #0071e3;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none; }
+
+  .footer {
+    text-align: center;
+    color: #86868b;
+    font-size: 11px;
+    margin-top: 24px;
+  }
+
+  .toggle-prompt {
+    font-size: 11px;
+    color: #6e6e73;
+    cursor: pointer;
+    margin-top: 8px;
+    display: inline-block;
+  }
+  .toggle-prompt:hover { color: #0071e3; }
+  .prompt-display {
+    background: #f5f5f7;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    color: #6e6e73;
+  }
+
+  @media (max-width: 600px) {
+    .input-grid { grid-template-columns: 1fr; }
+    .span-2 { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+  <h1>KOREC 初回商談前リサーチ</h1>
+  <p class="subtitle">企業情報を入力 → Claude + Web検索で自動リサーチ。結果がそのままページに表示されます。</p>
+
+  <div id="storageWarning" class="card hidden" style="background:#fff8e1; border:1px solid #ffd54f; color:#7a5c00;">
+    ⚠️ <strong>このプレビューでは設定が保存されません。</strong>
+    リロードするたびにAPI keyの再入力が必要です。永続化したい場合は、このHTMLファイルをFinderから直接ダブルクリックで開いてください（<code>file://</code> なら localStorage が有効）。
+  </div>
+
+  <details class="card" id="settings-card">
+    <summary>⚙️ 設定（初回のみAPI key設定）</summary>
+    <div>
+      <label>Anthropic API key</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-...">
+      <p class="hint">
+        <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> で発行。
+        ブラウザのlocalStorageに保存されます（外部送信なし）。
+      </p>
+      <label>モデル</label>
+      <select id="model">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6（推奨・コスト低）</option>
+        <option value="claude-opus-4-7">Claude Opus 4.7（精度高・コスト高）</option>
+      </select>
+      <div class="actions">
+        <button class="small" onclick="saveSettings()">保存</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="card">
+    <div class="input-grid">
+      <div class="span-2">
+        <label>企業名 <span style="color:#ff3b30">*</span></label>
+        <input type="text" id="company" placeholder="例：株式会社サンプル">
+      </div>
+      <div class="span-2">
+        <label>企業URL</label>
+        <input type="text" id="url" placeholder="https://example.com">
+      </div>
+      <div>
+        <label>商談相手・役職</label>
+        <input type="text" id="role" placeholder="例：人事部長">
+      </div>
+      <div>
+        <label>商談相手・名前</label>
+        <input type="text" id="name" placeholder="例：山田太郎">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="secondary" onclick="clearAll()">クリア</button>
+      <button id="runAllBtn" onclick="runAll()">全て実行</button>
+    </div>
+  </div>
+
+  <div id="output" class="hidden">
+    <div class="card" data-n="1">
+      <div class="prompt-header">
+        <div>
+          <div class="prompt-title">① 基本リサーチ</div>
+          <div class="prompt-meta">企業概要・ニュース・採用状況（中途／新卒）・経営層・刺さる切り口</div>
+        </div>
+        <button class="small secondary run-btn" onclick="runOne(1)">単独実行</button>
+      </div>
+      <div class="status"></div>
+      <div class="result"></div>
+      <span class="toggle-prompt" onclick="togglePrompt(1)">▸ 使用プロンプトを見る</span>
+      <div class="prompt-display hidden" data-prompt="1"></div>
+    </div>
+
+    <div class="card" data-n="2">
+      <div class="prompt-header">
+        <div>
+          <div class="prompt-title">② 採用課題の深掘り</div>
+          <div class="prompt-meta">中途／新卒それぞれの課題・KOREC強み領域・初回質問リスト</div>
+        </div>
+        <button class="small secondary run-btn" onclick="runOne(2)">単独実行</button>
+      </div>
+      <div class="status"></div>
+      <div class="result"></div>
+      <span class="toggle-prompt" onclick="togglePrompt(2)">▸ 使用プロンプトを見る</span>
+      <div class="prompt-display hidden" data-prompt="2"></div>
+    </div>
+
+    <div class="card" data-n="3">
+      <div class="prompt-header">
+        <div>
+          <div class="prompt-title">③ 担当者リサーチ</div>
+          <div class="prompt-meta">経歴・発信内容・関心領域・話題作り素材・地雷ワード</div>
+        </div>
+        <button class="small secondary run-btn" onclick="runOne(3)">単独実行</button>
+      </div>
+      <div class="status"></div>
+      <div class="result"></div>
+      <span class="toggle-prompt" onclick="togglePrompt(3)">▸ 使用プロンプトを見る</span>
+      <div class="prompt-display hidden" data-prompt="3"></div>
+    </div>
+
+    <div class="card" data-n="4">
+      <div class="prompt-header">
+        <div>
+          <div class="prompt-title">④ 競合・代替手段の確認</div>
+          <div class="prompt-meta">中途／新卒の使用媒体・KORECの隙間・他社じゃダメな理由</div>
+        </div>
+        <button class="small secondary run-btn" onclick="runOne(4)">単独実行</button>
+      </div>
+      <div class="status"></div>
+      <div class="result"></div>
+      <span class="toggle-prompt" onclick="togglePrompt(4)">▸ 使用プロンプトを見る</span>
+      <div class="prompt-display hidden" data-prompt="4"></div>
+    </div>
+  </div>
+
+  <div class="footer">KOREC RA 初回商談前リサーチ / Powered by Claude + Web Search</div>
+
+<script>
+// ===== Settings (localStorage with in-memory fallback) =====
+const memStore = {};
+let storageAvailable = false;
+try {
+  localStorage.setItem('__test__', '1');
+  localStorage.removeItem('__test__');
+  storageAvailable = true;
+} catch (e) {
+  storageAvailable = false;
+}
+function storeGet(k) {
+  if (storageAvailable) {
+    try { return localStorage.getItem(k); } catch { return memStore[k] || null; }
+  }
+  return memStore[k] || null;
+}
+function storeSet(k, v) {
+  memStore[k] = v;
+  if (storageAvailable) {
+    try { localStorage.setItem(k, v); } catch {}
+  }
+}
+
+function loadSettings() {
+  const key = storeGet('anthropic_api_key') || '';
+  const model = storeGet('anthropic_model') || 'claude-sonnet-4-6';
+  document.getElementById('apiKey').value = key;
+  document.getElementById('model').value = model;
+  if (!key) {
+    document.getElementById('settings-card').open = true;
+  }
+  if (!storageAvailable) {
+    const note = document.getElementById('storageWarning');
+    if (note) note.classList.remove('hidden');
+  }
+}
+function saveSettings() {
+  const key = document.getElementById('apiKey').value.trim();
+  const model = document.getElementById('model').value;
+  storeSet('anthropic_api_key', key);
+  storeSet('anthropic_model', model);
+  document.getElementById('settings-card').open = false;
+  if (storageAvailable) {
+    alert('保存しました');
+  } else {
+    alert('保存しました（このセッション中のみ有効）');
+  }
+}
+loadSettings();
+
+// ===== Prompts =====
+function buildPrompts(inp) {
+  const c = inp.company;
+  const u = inp.url || '[コーポレートサイトURL不明]';
+  const personLine = (inp.name || inp.role)
+    ? `${inp.name || '[名前不明]'}（${inp.role || '[役職不明]'}）`
+    : '[担当者情報なし]';
+
+  return {
+    1: `あなたはKOREC（韓国人材紹介サービス）の営業として、初回商談に向けた事前リサーチを行います。Web検索を使って最新情報を取得し、必ず情報源URLを併記してください。
+
+【対象企業】
+会社名：${c}
+URL：${u}
+担当者名・役職：${personLine}
+
+【調べてほしいこと】
+1. 企業概要（事業内容、設立年、従業員数、売上規模、本社所在地）
+2. 直近1年のニュース・プレスリリース（特に採用、海外展開、組織変更）
+3. 採用ページの状況 ※経験者採用と新卒採用を必ず分けて出力すること
+
+   ### 経験者採用（中途）
+   - 自社採用ページ・ビズリーチ・リクナビNEXT・Wantedly・Green・Indeed等での募集状況
+   - 現在募集中の職種（エンジニア／非エンジニア別）
+   - 求める人物像・スキル要件
+   - 想定年収レンジ
+   - 外国人採用の実績や記載の有無
+
+   ### 新卒採用
+   - **マイナビ・リクナビ・ONE CAREER・キャリタス就活** での掲載状況を必ずWeb検索で確認すること
+   - マイナビの企業ページURL（"${c} マイナビ" で検索）
+   - 募集職種・採用人数（理系/文系の内訳）
+   - 求める学歴・スキル要件
+   - 外国籍学生（特に韓国人留学生）の受け入れ実績や記載の有無
+   - 初任給・福利厚生
+
+4. 競合・業界ポジション
+5. 経営層のコメント・ビジョン（社長メッセージ、IR資料、メディア記事から）
+6. 韓国人材を採用するメリット仮説（3つ）※中途と新卒それぞれの切り口で考える
+7. 商談で刺さりそうな切り口・初回フックの提案（3つ）
+
+Markdownで見出し付きで出力してください。情報が見つからなかった項目は「情報なし」と明記してください。`,
+
+    2: `${c} の採用課題を推察してください。Web検索で求人情報や採用媒体の掲載状況を調べた上で、**経験者採用（中途）と新卒採用を分けて**回答してください。
+
+【インプット】
+- 企業URL：${u}
+- 中途媒体：ビズリーチ、リクナビNEXT、Wantedly、Green、Indeed、doda 等
+- 新卒媒体：**マイナビ、リクナビ、ONE CAREER、キャリタス就活**（"${c} マイナビ" 等で必ず検索すること）
+
+【出力】
+
+## A. 経験者採用（中途）の課題
+1. 募集職種から読み取れる事業フェーズ・課題
+2. 募集が長期化していそうな職種（掲載期間や再掲載の痕跡から推察）
+3. 給与レンジと市場相場のギャップ
+4. 「日本人だけで採れていない」可能性が高い職種TOP3とその根拠
+5. 韓国人材（KORECの強み：理工系・日本語N2以上）で解決できる領域
+
+## B. 新卒採用の課題
+1. マイナビ等の掲載内容から読み取れる新卒採用方針（採用人数、理系比率など）
+2. 過去数年の採用実績やエントリー数の推察
+3. 「日本人学生だけで採れていない」可能性（外国籍受け入れ実績、グローバル人材言及など）
+4. 韓国人新卒（理工系・日本語N2以上）で解決できる領域
+5. 入社後の定着・育成体制の言及有無
+
+## C. 初回商談で投げる質問リスト（中途5問・新卒5問、深さ順）
+
+Markdownで見出し付き・情報源URL併記で出力してください。`,
+
+    3: `${inp.name || '[担当者]'}（${inp.role || '[役職不明]'}、${c}）について担当者リサーチを行ってください。Web検索を使って公開情報のみから情報収集してください。
+
+【調べる項目】
+1. 経歴（LinkedIn、Wantedly、過去インタビューから）
+2. 発信内容（note、X、登壇歴）
+3. その人の関心領域・問題意識
+4. 社内での立ち位置・関わってきた業務領域（採用なのか事業なのか等、報道や登壇から読み取れる範囲で）
+5. 商談での話題作り素材3つ
+6. 避けるべき地雷ワード（あれば）
+
+※公開情報のみ。プライベートな情報は含めない。
+※決裁権の有無は推測しない（聞かれた場合のみ「推察ベースで」と明記）。
+情報が見つからなかった項目は「情報なし」と明記してください。
+Markdownで見出し付き・情報源URL併記で出力してください。`,
+
+    4: `${c} が現在使っていそうな採用チャネルを推察してください。Web検索で求人媒体の掲載状況、社員のSNS発信を調べた上で、**経験者採用（中途）と新卒採用を分けて**回答してください。
+
+【出力】
+
+## A. 経験者採用（中途）チャネル
+1. 利用が推測される媒体・エージェント（ビズリーチ、リクナビNEXT、Wantedly、Green、doda、各種特化型エージェント等の求人転載状況から）
+2. リファラル採用の活発さ（社員のSNS発信から）
+3. 過去に外国人採用エージェントを使った痕跡
+
+## B. 新卒採用チャネル
+1. 利用が推測される媒体（**マイナビ、リクナビ、ONE CAREER、キャリタス就活**の掲載状況から）
+2. 大学・キャリアセンター経由のリクルーティング痕跡（合同説明会、学校推薦等）
+3. 外国人留学生採用エージェント（ASIA to JAPAN等）使用の痕跡
+
+## C. 全体評価
+1. 採用内製化レベル（採用担当の人数・スキル）
+2. KORECが入る隙間・差別化ポイント（中途／新卒それぞれ）
+3. 「他社じゃダメな理由」の言語化（中途向け2パターン・新卒向け2パターン）
+
+Markdownで見出し付き・情報源URL併記で出力してください。`,
+  };
+}
+
+// ===== API call =====
+async function callClaude(prompt) {
+  const apiKey = storeGet('anthropic_api_key');
+  if (!apiKey) throw new Error('設定でAPI keyを保存してください');
+  const model = storeGet('anthropic_model') || 'claude-sonnet-4-6';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: model,
+      max_tokens: 4096,
+      tools: [{
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 5,
+      }],
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    let msg = `HTTP ${response.status}`;
+    try {
+      const err = await response.json();
+      msg = err.error?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const text = (data.content || [])
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('\n\n');
+  return text || '（応答が空でした）';
+}
+
+// ===== Run =====
+function getInputs() {
+  const company = document.getElementById('company').value.trim();
+  if (!company) {
+    alert('企業名は必須です');
+    document.getElementById('company').focus();
+    return null;
+  }
+  return {
+    company,
+    url: document.getElementById('url').value.trim(),
+    role: document.getElementById('role').value.trim(),
+    name: document.getElementById('name').value.trim(),
+  };
+}
+
+async function runOne(n, inputs) {
+  inputs = inputs || getInputs();
+  if (!inputs) return;
+
+  document.getElementById('output').classList.remove('hidden');
+
+  const prompts = buildPrompts(inputs);
+  const card = document.querySelector(`.card[data-n="${n}"]`);
+  const statusEl = card.querySelector('.status');
+  const resultEl = card.querySelector('.result');
+  const runBtn = card.querySelector('.run-btn');
+  const promptDisp = card.querySelector(`.prompt-display[data-prompt="${n}"]`);
+
+  promptDisp.textContent = prompts[n];
+
+  runBtn.disabled = true;
+  statusEl.className = 'status';
+  statusEl.innerHTML = '<span class="spinner"></span>リサーチ中…（Web検索を含むため30秒〜2分かかります）';
+  resultEl.innerHTML = '';
+
+  try {
+    const result = await callClaude(prompts[n]);
+    resultEl.innerHTML = marked.parse(result);
+    // open links in new tab
+    resultEl.querySelectorAll('a').forEach(a => a.target = '_blank');
+    statusEl.className = 'status success';
+    statusEl.textContent = '✓ 完了';
+  } catch (e) {
+    statusEl.className = 'status error';
+    statusEl.textContent = `❌ エラー: ${e.message}`;
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+async function runAll() {
+  const inputs = getInputs();
+  if (!inputs) return;
+  const btn = document.getElementById('runAllBtn');
+  btn.disabled = true;
+  btn.textContent = '実行中…';
+  document.getElementById('output').classList.remove('hidden');
+  document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+  try {
+    await Promise.all([1, 2, 3, 4].map(n => runOne(n, inputs)));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '全て実行';
+  }
+}
+
+function clearAll() {
+  ['company', 'url', 'role', 'name'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('output').classList.add('hidden');
+  document.querySelectorAll('.result').forEach(r => r.innerHTML = '');
+  document.querySelectorAll('.status').forEach(s => { s.textContent = ''; s.className = 'status'; });
+}
+
+function togglePrompt(n) {
+  const card = document.querySelector(`.card[data-n="${n}"]`);
+  const disp = card.querySelector(`.prompt-display[data-prompt="${n}"]`);
+  const toggle = card.querySelector('.toggle-prompt');
+  if (disp.classList.contains('hidden')) {
+    disp.classList.remove('hidden');
+    toggle.textContent = '▾ 使用プロンプトを隠す';
+  } else {
+    disp.classList.add('hidden');
+    toggle.textContent = '▸ 使用プロンプトを見る';
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runAll();
+});
+</script>
+</body>
+</html>
