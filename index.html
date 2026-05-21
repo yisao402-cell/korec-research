@@ -25,17 +25,71 @@
     margin-bottom: 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
-  details.card > summary {
+  .settings-trigger {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.9);
+    color: #86868b;
+    border: 1px solid #e5e5ea;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    padding: 0;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    color: #6e6e73;
-    list-style: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    z-index: 100;
+    line-height: 1;
   }
-  details.card > summary::-webkit-details-marker { display: none; }
-  details.card > summary::before { content: '▸ '; }
-  details.card[open] > summary::before { content: '▾ '; }
-  details.card[open] > summary { margin-bottom: 12px; }
+  .settings-trigger:hover {
+    background: white;
+    color: #1d1d1f;
+    border-color: #d2d2d7;
+  }
+
+  .settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.15);
+    z-index: 199;
+  }
+  .settings-overlay.hidden { display: none; }
+
+  .settings-modal {
+    position: fixed;
+    top: 60px;
+    right: 16px;
+    width: 360px;
+    max-width: calc(100vw - 32px);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 20px 20px 16px;
+    z-index: 200;
+  }
+  .settings-modal.hidden { display: none; }
+  .settings-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
+  }
+  .settings-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #86868b;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+  }
+  .settings-close:hover { color: #1d1d1f; background: none; }
 
   .input-grid {
     display: grid;
@@ -298,30 +352,33 @@
   <h1>KOREC 初回商談前リサーチ</h1>
   <p class="subtitle">企業情報を入力 → Claude + Web検索で自動リサーチ。結果がそのままページに表示されます。</p>
 
+  <button class="settings-trigger" onclick="toggleSettings()" title="設定" aria-label="設定">⚙️</button>
+
   <div id="storageWarning" class="card hidden" style="background:#fff8e1; border:1px solid #ffd54f; color:#7a5c00;">
     ⚠️ <strong>このプレビューでは設定が保存されません。</strong>
     リロードするたびにAPI keyの再入力が必要です。永続化したい場合は、このHTMLファイルをFinderから直接ダブルクリックで開いてください（<code>file://</code> なら localStorage が有効）。
   </div>
 
-  <details class="card" id="settings-card">
-    <summary>⚙️ 設定（初回のみAPI key設定）</summary>
-    <div>
-      <label>Anthropic API key</label>
-      <input type="password" id="apiKey" placeholder="sk-ant-...">
-      <p class="hint">
-        <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> で発行。
-        ブラウザのlocalStorageに保存されます（外部送信なし）。
-      </p>
-      <label>モデル</label>
-      <select id="model">
-        <option value="claude-sonnet-4-6">Claude Sonnet 4.6（推奨・コスト低）</option>
-        <option value="claude-opus-4-7">Claude Opus 4.7（精度高・コスト高）</option>
-      </select>
-      <div class="actions">
-        <button class="small" onclick="saveSettings()">保存</button>
-      </div>
+  <div class="settings-overlay hidden" id="settingsOverlay" onclick="toggleSettings()"></div>
+  <div class="settings-modal hidden" id="settingsModal">
+    <div class="settings-modal-header">
+      <span>⚙️ 設定</span>
+      <button class="settings-close" onclick="toggleSettings()" aria-label="閉じる">×</button>
     </div>
-  </details>
+    <label>Anthropic API key</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-...">
+    <p class="hint">
+      <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> で発行。localStorageに保存（外部送信なし）。
+    </p>
+    <label>モデル</label>
+    <select id="model">
+      <option value="claude-sonnet-4-6">Claude Sonnet 4.6（推奨・コスト低）</option>
+      <option value="claude-opus-4-7">Claude Opus 4.7（精度高・コスト高）</option>
+    </select>
+    <div class="actions">
+      <button class="small" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
 
   <div class="card">
     <div class="input-grid">
@@ -444,13 +501,20 @@ function storeSet(k, v) {
   }
 }
 
+function toggleSettings() {
+  document.getElementById('settingsModal').classList.toggle('hidden');
+  document.getElementById('settingsOverlay').classList.toggle('hidden');
+}
+
 function loadSettings() {
   const key = storeGet('anthropic_api_key') || '';
   const model = storeGet('anthropic_model') || 'claude-sonnet-4-6';
   document.getElementById('apiKey').value = key;
   document.getElementById('model').value = model;
   if (!key) {
-    document.getElementById('settings-card').open = true;
+    // 初回はモーダルを開く
+    document.getElementById('settingsModal').classList.remove('hidden');
+    document.getElementById('settingsOverlay').classList.remove('hidden');
   }
   if (!storageAvailable) {
     const note = document.getElementById('storageWarning');
@@ -462,10 +526,9 @@ function saveSettings() {
   const model = document.getElementById('model').value;
   storeSet('anthropic_api_key', key);
   storeSet('anthropic_model', model);
-  document.getElementById('settings-card').open = false;
-  if (storageAvailable) {
-    alert('保存しました');
-  } else {
+  document.getElementById('settingsModal').classList.add('hidden');
+  document.getElementById('settingsOverlay').classList.add('hidden');
+  if (!storageAvailable) {
     alert('保存しました（このセッション中のみ有効）');
   }
 }
