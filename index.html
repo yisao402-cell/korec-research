@@ -177,54 +177,59 @@
     background: #ffffff;
     border: 1px solid #e5e5ea;
     border-radius: 8px;
-    padding: 24px 28px;
-    font-size: 14px;
-    line-height: 1.8;
+    padding: 36px 40px;
+    font-size: 15px;
+    line-height: 2.0;
     color: #1d1d1f;
+    letter-spacing: 0.01em;
   }
   .result:empty { display: none; }
   .result > *:first-child { margin-top: 0 !important; }
   .result > *:last-child { margin-bottom: 0 !important; }
 
   .result h1 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    margin: 28px 0 12px;
-    padding-bottom: 8px;
+    margin: 44px 0 18px;
+    padding-bottom: 10px;
     border-bottom: 2px solid #0071e3;
     color: #1d1d1f;
+    line-height: 1.5;
   }
   .result h2 {
-    font-size: 17px;
+    font-size: 18px;
     font-weight: 700;
-    margin: 28px 0 10px;
-    padding-left: 10px;
+    margin: 40px 0 16px;
+    padding-left: 12px;
     border-left: 4px solid #0071e3;
     color: #1d1d1f;
+    line-height: 1.5;
   }
   .result h3 {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
-    margin: 22px 0 8px;
+    margin: 32px 0 12px;
     color: #424245;
+    line-height: 1.5;
   }
   .result h4 {
     font-size: 14px;
     font-weight: 600;
-    margin: 18px 0 6px;
+    margin: 24px 0 10px;
     color: #6e6e73;
+    line-height: 1.5;
   }
 
-  .result p { margin: 10px 0; }
+  .result p { margin: 18px 0; }
   .result ul, .result ol {
-    padding-left: 24px;
-    margin: 10px 0;
+    padding-left: 28px;
+    margin: 18px 0;
   }
   .result li {
-    margin: 6px 0;
-    padding-left: 4px;
+    margin: 12px 0;
+    padding-left: 6px;
   }
-  .result li > p { margin: 4px 0; }
+  .result li > p { margin: 6px 0; }
   .result li::marker { color: #0071e3; }
 
   .result a {
@@ -234,6 +239,29 @@
     word-break: break-all;
   }
   .result a:hover { background: #e8f1fd; }
+
+  /* インライン引用チップ（ChatGPT風） */
+  .result a.cite, .result span.cite {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    vertical-align: super;
+    line-height: 1;
+    color: #0071e3;
+    background: #e8f1fd;
+    border: 1px solid #cce0f9 !important;
+    border-radius: 4px;
+    padding: 2px 5px;
+    margin: 0 1px 0 2px;
+    text-decoration: none !important;
+    border-bottom: none !important;
+    word-break: keep-all;
+  }
+  .result a.cite:hover {
+    background: #0071e3;
+    color: white !important;
+    border-color: #0071e3 !important;
+  }
 
   .result strong {
     font-weight: 700;
@@ -721,31 +749,78 @@ async function callGemini(prompt) {
   const candidate = (data.candidates || [])[0];
   if (!candidate) throw new Error('応答が空でした');
 
-  // Block check
   if (candidate.finishReason === 'SAFETY') {
     throw new Error('安全フィルタにブロックされました');
   }
 
-  const text = (candidate.content?.parts || [])
+  const baseText = (candidate.content?.parts || [])
     .filter(p => p.text)
     .map(p => p.text)
-    .join('\n\n') || '（応答テキストが空でした）';
+    .join('\n\n');
 
-  // Append grounding sources (Web検索の出典)
+  if (!baseText) return '（応答テキストが空でした）';
+
   const chunks = candidate.groundingMetadata?.groundingChunks || [];
+  const supports = candidate.groundingMetadata?.groundingSupports || [];
+
+  // 該当テキストの直後に [N] 引用チップを差し込む
+  const withCitations = injectInlineCitations(baseText, supports, chunks);
+
+  // 末尾には全情報源の一覧（補助）
   if (chunks.length > 0) {
     const sources = chunks
       .map((c, i) => {
         const web = c.web || {};
         const title = web.title || `Source ${i + 1}`;
         const uri = web.uri || '';
-        return uri ? `${i + 1}. [${title}](${uri})` : `${i + 1}. ${title}`;
+        const num = i + 1;
+        return uri ? `${num}. [${title}](${uri})` : `${num}. ${title}`;
       })
       .join('\n');
-    return `${text}\n\n---\n\n## 📚 参照情報源（Web検索）\n${sources}`;
+    return `${withCitations}\n\n---\n\n### 📚 参照情報源（全${chunks.length}件）\n${sources}`;
   }
 
-  return text;
+  return withCitations;
+}
+
+// Gemini の groundingSupports から、該当テキスト末尾に [N] チップを挿入
+// segment.endIndex は UTF-8 バイト位置なので Uint8Array で操作する
+function injectInlineCitations(text, supports, chunks) {
+  if (!supports.length || !chunks.length) return text;
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const bytes = Array.from(encoder.encode(text));
+
+  const valid = supports
+    .filter(s => typeof s.segment?.endIndex === 'number' && (s.groundingChunkIndices || []).length > 0)
+    .sort((a, b) => b.segment.endIndex - a.segment.endIndex); // 後ろから挿入
+
+  for (const s of valid) {
+    const endIdx = Math.min(s.segment.endIndex, bytes.length);
+    const chunkIdxs = s.groundingChunkIndices;
+
+    const marker = chunkIdxs
+      .map(i => {
+        const c = chunks[i];
+        const uri = (c?.web?.uri || '').replace(/"/g, '&quot;');
+        const title = (c?.web?.title || '')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        const num = i + 1;
+        if (uri) {
+          return `<a href="${uri}" target="_blank" rel="noopener" class="cite" title="${title}">${num}</a>`;
+        }
+        return `<span class="cite" title="${title}">${num}</span>`;
+      })
+      .join('');
+
+    const markerBytes = Array.from(encoder.encode(marker));
+    bytes.splice(endIdx, 0, ...markerBytes);
+  }
+
+  return decoder.decode(new Uint8Array(bytes));
 }
 
 // ===== Run =====
@@ -771,7 +846,7 @@ const rawResults = {};
 if (typeof marked !== 'undefined') {
   marked.setOptions({
     gfm: true,
-    breaks: true,
+    breaks: false, // 段落内の単一改行は無視（連続改行で段落区切り）— 詰まり防止
   });
 }
 
