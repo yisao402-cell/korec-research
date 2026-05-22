@@ -240,6 +240,42 @@
   }
   .result a:hover { background: #e8f1fd; }
 
+  /* 言語タブ */
+  .result-tabs {
+    display: flex;
+    gap: 2px;
+    margin: 14px 0 0;
+    border-bottom: 1px solid #e5e5ea;
+  }
+  .result-tabs.hidden { display: none; }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    padding: 8px 18px;
+    font-size: 13px;
+    color: #6e6e73;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    margin-bottom: -1px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .tab-btn:hover { background: #f5f5f7; color: #1d1d1f; }
+  .tab-btn.active {
+    color: #0071e3;
+    border-bottom-color: #0071e3;
+    font-weight: 600;
+  }
+  .translate-cta {
+    text-align: center;
+    padding: 50px 20px;
+  }
+  .translate-cta .hint {
+    margin-top: 12px;
+    color: #86868b;
+    font-size: 12px;
+  }
+
   /* インライン引用チップ（ChatGPT風） */
   .result a.cite, .result span.cite {
     display: inline-block;
@@ -443,7 +479,17 @@
         <button class="small secondary run-btn" onclick="runOne(1)">単独実行</button>
       </div>
       <div class="status"></div>
-      <div class="result"></div>
+      <div class="result-tabs hidden">
+        <button class="tab-btn active" data-tab="ja" onclick="switchTab(1, 'ja')">🇯🇵 日本語</button>
+        <button class="tab-btn" data-tab="ko" onclick="switchTab(1, 'ko')">🇰🇷 한국어</button>
+      </div>
+      <div class="result" data-lang="ja"></div>
+      <div class="result hidden" data-lang="ko">
+        <div class="translate-cta">
+          <button class="small secondary" onclick="translateResult(1)">🇰🇷 한국어로 번역</button>
+          <p class="hint">クリックで韓国語に翻訳（追加で1回API呼び出し）</p>
+        </div>
+      </div>
       <div class="result-actions hidden">
         <button class="small secondary" onclick="copyResult(1, this)">結果をコピー</button>
       </div>
@@ -460,7 +506,17 @@
         <button class="small secondary run-btn" onclick="runOne(2)">単独実行</button>
       </div>
       <div class="status"></div>
-      <div class="result"></div>
+      <div class="result-tabs hidden">
+        <button class="tab-btn active" data-tab="ja" onclick="switchTab(2, 'ja')">🇯🇵 日本語</button>
+        <button class="tab-btn" data-tab="ko" onclick="switchTab(2, 'ko')">🇰🇷 한국어</button>
+      </div>
+      <div class="result" data-lang="ja"></div>
+      <div class="result hidden" data-lang="ko">
+        <div class="translate-cta">
+          <button class="small secondary" onclick="translateResult(2)">🇰🇷 한국어로 번역</button>
+          <p class="hint">クリックで韓国語に翻訳（追加で1回API呼び出し）</p>
+        </div>
+      </div>
       <div class="result-actions hidden">
         <button class="small secondary" onclick="copyResult(2, this)">結果をコピー</button>
       </div>
@@ -803,6 +859,7 @@ function getInputs() {
 
 // raw markdown cache for copying
 const rawResults = {};
+const koreanResults = {};
 
 // configure marked for friendlier rendering
 if (typeof marked !== 'undefined') {
@@ -835,7 +892,9 @@ async function runOne(n, inputs) {
   const prompts = buildPrompts(inputs);
   const card = document.querySelector(`.card[data-n="${n}"]`);
   const statusEl = card.querySelector('.status');
-  const resultEl = card.querySelector('.result');
+  const resultJa = card.querySelector('.result[data-lang="ja"]');
+  const resultKo = card.querySelector('.result[data-lang="ko"]');
+  const tabsEl = card.querySelector('.result-tabs');
   const actionsEl = card.querySelector('.result-actions');
   const runBtn = card.querySelector('.run-btn');
   const promptDisp = card.querySelector(`.prompt-display[data-prompt="${n}"]`);
@@ -845,16 +904,23 @@ async function runOne(n, inputs) {
   runBtn.disabled = true;
   statusEl.className = 'status';
   statusEl.innerHTML = '<span class="spinner"></span>リサーチ中…（Web検索を含むため30秒〜2分かかります）';
-  resultEl.innerHTML = '';
+  resultJa.innerHTML = '';
+  // 韓国語パネルは翻訳CTAに戻す
+  resultKo.innerHTML = `<div class="translate-cta"><button class="small secondary" onclick="translateResult(${n})">🇰🇷 한국어로 번역</button><p class="hint">クリックで韓国語に翻訳（追加で1回API呼び出し）</p></div>`;
+  delete koreanResults[n];
+  // 日本語タブに戻す
+  switchTab(n, 'ja');
+  if (tabsEl) tabsEl.classList.add('hidden');
   if (actionsEl) actionsEl.classList.add('hidden');
 
   try {
     const result = await callGemini(prompts[n]);
     rawResults[n] = result;
-    resultEl.innerHTML = marked.parse(preprocessMarkdown(result));
-    resultEl.querySelectorAll('a').forEach(a => a.target = '_blank');
+    resultJa.innerHTML = marked.parse(preprocessMarkdown(result));
+    resultJa.querySelectorAll('a').forEach(a => a.target = '_blank');
     statusEl.className = 'status success';
     statusEl.textContent = '✓ 完了';
+    if (tabsEl) tabsEl.classList.remove('hidden');
     if (actionsEl) actionsEl.classList.remove('hidden');
   } catch (e) {
     statusEl.className = 'status error';
@@ -864,13 +930,95 @@ async function runOne(n, inputs) {
   }
 }
 
+function switchTab(n, lang) {
+  const card = document.querySelector(`.card[data-n="${n}"]`);
+  card.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === lang);
+  });
+  card.querySelectorAll('.result[data-lang]').forEach(r => {
+    r.classList.toggle('hidden', r.dataset.lang !== lang);
+  });
+}
+
+async function translateResult(n) {
+  const sourceText = rawResults[n];
+  if (!sourceText) return;
+
+  const card = document.querySelector(`.card[data-n="${n}"]`);
+  const koPanel = card.querySelector('.result[data-lang="ko"]');
+
+  koPanel.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#6e6e73;"><span class="spinner"></span> 한국어로 번역 중…</div>';
+
+  try {
+    const translatePrompt = `다음 일본어 문서를 한국어로 번역해 주세요. KOREC（한국 인재 소개 서비스）의 영업 사전 준비 시트입니다.
+
+【번역 규칙】
+- Markdown 서식 (제목, 리스트, 표, 링크 등)은 그대로 유지하세요
+- HTML 태그 (예: <a>, <span>, class 속성 등)도 그대로 유지하세요
+- 【事実】 → 【사실】, 【推測】 → 【추측】 로 변환하세요
+- 비즈니스 한국어로 자연스럽게 번역하세요
+- 회사명·매체명 등 일본어 고유명사는 한국어 표기 (예: 마이나비, 리쿠나비, 원커리어)
+- 직책·직종은 한국어로 번역 (예: 영업, 엔지니어, 인사부장 등)
+- 본문만 번역해서 출력 (전치사·코드블록 등 추가 설명 불필요)
+
+---
+
+${sourceText}`;
+
+    const translated = await callGeminiTranslate(translatePrompt);
+    koreanResults[n] = translated;
+    koPanel.innerHTML = marked.parse(preprocessMarkdown(translated));
+    koPanel.querySelectorAll('a').forEach(a => a.target = '_blank');
+  } catch (e) {
+    koPanel.innerHTML = `<div style="color:#ff3b30;padding:20px;text-align:center;">번역 실패: ${e.message}<br><button class="small secondary" style="margin-top:12px;" onclick="translateResult(${n})">다시 시도</button></div>`;
+  }
+}
+
+// 翻訳用：Web検索なしの軽い呼び出し
+async function callGeminiTranslate(prompt) {
+  const apiKey = storeGet('gemini_api_key');
+  if (!apiKey) throw new Error('Gemini API key가 설정되지 않았습니다');
+  const model = storeGet('gemini_model') || 'gemini-2.5-flash';
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.3,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    let msg = `HTTP ${response.status}`;
+    try {
+      const err = await response.json();
+      msg = err.error?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  const candidate = (data.candidates || [])[0];
+  const text = (candidate?.content?.parts || [])
+    .filter(p => p.text).map(p => p.text).join('\n\n');
+  return text || '（응답이 비어 있습니다）';
+}
+
 async function copyResult(n, btn) {
-  const text = rawResults[n];
+  // アクティブなタブの言語で出し分け
+  const card = document.querySelector(`.card[data-n="${n}"]`);
+  const activeTab = card.querySelector('.tab-btn.active')?.dataset.tab || 'ja';
+  const text = activeTab === 'ko' ? (koreanResults[n] || rawResults[n]) : rawResults[n];
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
     const original = btn.textContent;
-    btn.textContent = 'コピーしました ✓';
+    btn.textContent = activeTab === 'ko' ? '복사됨 ✓' : 'コピーしました ✓';
     setTimeout(() => { btn.textContent = original; }, 1500);
   } catch (e) {
     alert('コピーに失敗しました');
