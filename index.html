@@ -404,14 +404,6 @@
       <option value="gemini-2.5-pro">Gemini 2.5 Pro（高精度・無料枠少なめ）</option>
     </select>
 
-    <hr style="border:none;border-top:1px solid #e5e5ea;margin:16px 0;">
-    <div style="font-size:12px;color:#6e6e73;font-weight:500;margin-bottom:8px;">📊 利用ログ（任意・スプシに記録）</div>
-    <label>あなたの名前（RA名）</label>
-    <input type="text" id="userName" placeholder="例：山田">
-    <label>ログ送信先URL（GAS Web App URL）</label>
-    <input type="text" id="logEndpoint" placeholder="https://script.google.com/macros/s/.../exec">
-    <p class="hint">空欄のままだとログは送信されません。URLは管理者から共有されたものを貼り付けてください。</p>
-
     <div class="actions">
       <button class="small" onclick="saveSettings()">保存</button>
     </div>
@@ -512,12 +504,8 @@ function toggleSettings() {
 function loadSettings() {
   const key = storeGet('gemini_api_key') || '';
   const model = storeGet('gemini_model') || 'gemini-2.5-flash';
-  const userName = storeGet('user_name') || '';
-  const logEndpoint = storeGet('log_endpoint') || '';
   document.getElementById('apiKey').value = key;
   document.getElementById('model').value = model;
-  document.getElementById('userName').value = userName;
-  document.getElementById('logEndpoint').value = logEndpoint;
   if (!key) {
     // 初回はモーダルを開く
     document.getElementById('settingsModal').classList.remove('hidden');
@@ -531,12 +519,8 @@ function loadSettings() {
 function saveSettings() {
   const key = document.getElementById('apiKey').value.trim();
   const model = document.getElementById('model').value;
-  const userName = document.getElementById('userName').value.trim();
-  const logEndpoint = document.getElementById('logEndpoint').value.trim();
   storeSet('gemini_api_key', key);
   storeSet('gemini_model', model);
-  storeSet('user_name', userName);
-  storeSet('log_endpoint', logEndpoint);
   document.getElementById('settingsModal').classList.add('hidden');
   document.getElementById('settingsOverlay').classList.add('hidden');
   if (!storageAvailable) {
@@ -545,17 +529,23 @@ function saveSettings() {
 }
 
 // ===== Log to Google Sheets (via Apps Script Web App) =====
-async function logToSheet(payload) {
-  const endpoint = storeGet('log_endpoint');
-  if (!endpoint) return; // ログ無効
+// 「全て実行」時のみ、企業名・URL・担当者役職・担当者名をスプシに記録（UIには非表示）
+// 共有スプシ（応募予測システムと共用）に research_log シートとして書き込まれる
+const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyYT8mHLcTUwqzoQVhXzl2MEPlvfQ7LmpEp0Ad2Ivxbo81KqqDegDUNoh7KOtILYEFBZg/exec';
+
+async function logToSheet(inputs) {
+  if (!LOG_ENDPOINT) return;
   try {
     const body = JSON.stringify({
-      ...payload,
-      user: storeGet('user_name') || '',
+      type: 'research_log', // GAS側でルーティングするためのキー
       timestamp: new Date().toISOString(),
+      company: inputs.company || '',
+      url: inputs.url || '',
+      role: inputs.role || '',
+      name: inputs.name || '',
     });
-    // GASはCORSヘッダ返さないので no-cors + text/plain で送信
-    await fetch(endpoint, {
+    // GASはCORSヘッダ返さないので no-cors + text/plain で送信（fire-and-forget）
+    await fetch(LOG_ENDPOINT, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -924,31 +914,9 @@ async function runOne(n, inputs) {
     statusEl.className = 'status success';
     statusEl.textContent = '✓ 完了';
     if (actionsEl) actionsEl.classList.remove('hidden');
-    logToSheet({
-      company: inputs.company,
-      url: inputs.url,
-      role: inputs.role,
-      name: inputs.name,
-      researchType: n === 1 ? '営業準備シート' : '担当者リサーチ',
-      model: storeGet('gemini_model') || 'gemini-2.5-flash',
-      success: true,
-      errorMsg: '',
-      charsCount: result.length,
-    });
   } catch (e) {
     statusEl.className = 'status error';
     statusEl.textContent = `❌ エラー: ${e.message}`;
-    logToSheet({
-      company: inputs.company,
-      url: inputs.url,
-      role: inputs.role,
-      name: inputs.name,
-      researchType: n === 1 ? '営業準備シート' : '担当者リサーチ',
-      model: storeGet('gemini_model') || 'gemini-2.5-flash',
-      success: false,
-      errorMsg: e.message,
-      charsCount: 0,
-    });
   } finally {
     runBtn.disabled = false;
   }
@@ -991,6 +959,8 @@ async function runAll() {
   btn.textContent = '実行中…';
   document.getElementById('output').classList.remove('hidden');
   document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+  // 「全て実行」押下のタイミングでスプシにログを送信（fire-and-forget）
+  logToSheet(inputs);
   try {
     await Promise.all([1, 2].map(n => runOne(n, inputs)));
   } finally {
