@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>KOREC 振り返り資料プロンプト生成ツール</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --primary:#0f172a; --accent:#2563eb; --accent-dark:#1d4ed8;
+    --bg:#f8fafc; --card:#fff; --border:#e2e8f0; --muted:#64748b;
+    --ok:#10b981; --warn:#f59e0b; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;
+       background:var(--bg);color:var(--primary);line-height:1.6}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 24px}
+  header{margin-bottom:24px}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px}
+  .step{background:var(--card);border:1px solid var(--border);border-radius:12px;
+        padding:20px 24px;margin-bottom:16px}
+  .step h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .badge{background:var(--accent);color:#fff;border-radius:999px;width:24px;height:24px;
+         display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+  .drop{display:block;border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;
+        cursor:pointer;transition:all .15s}
+  .drop:hover, .drop.over{border-color:var(--accent);background:#eff6ff}
+  .drop p{margin:0;color:var(--muted)}
+  .drop input{display:none}
+  .preview{display:none}
+  .preview.show{display:block}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:12px 0}
+  .stat{background:#f1f5f9;border-radius:8px;padding:12px}
+  .stat .num{font-size:22px;font-weight:700;color:var(--accent)}
+  .stat .lbl{font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  th{background:#f8fafc;font-weight:600}
+  .dist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:12px}
+  .dist-card{background:#f8fafc;border-radius:8px;padding:12px 14px}
+  .dist-card h3{font-size:13px;margin:0 0 8px;color:var(--muted)}
+  .bar-row{display:grid;grid-template-columns:120px 1fr 40px;gap:8px;align-items:center;
+           font-size:12px;margin-bottom:4px}
+  .bar-bg{background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden}
+  .bar-fg{background:var(--accent);height:100%}
+  .bar-num{text-align:right;color:var(--muted)}
+  textarea{width:100%;min-height:340px;font-family:"SF Mono",Menlo,monospace;font-size:12px;
+           padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical;line-height:1.5}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 18px;
+       font-size:14px;font-weight:600;cursor:pointer;transition:all .15s}
+  .btn:hover{background:var(--accent-dark)}
+  .btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btn-ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+  .btn-ghost:hover{background:#eff6ff}
+  .note{background:#fef3c7;border-left:4px solid var(--warn);padding:12px 16px;
+        border-radius:6px;font-size:13px;margin-top:12px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+         background:#0f172a;color:#fff;padding:10px 20px;border-radius:8px;
+         font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  ol.guide{margin:8px 0 0 18px;padding:0}
+  ol.guide li{margin-bottom:4px;font-size:13px}
+  details{margin-top:8px}
+  summary{cursor:pointer;color:var(--accent);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>KOREC 振り返り資料プロンプト生成ツール</h1>
+    <p class="sub">クライアント企業向けの振り返り資料を、Geminiで作成するためのプロンプトを生成します</p>
+  </header>
+
+  <div class="step">
+    <h2><span class="badge">1</span>応募データを読み込む</h2>
+    <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:6px;font-size:13px;line-height:1.6;margin-bottom:12px">
+      <strong>⚠️ アップロード前の注意</strong><br>
+      管理画面から候補者リスト出力を実施して、<strong>個人情報（氏名・電話番号・メールアドレス）を削除してから</strong>アップしてください。
+    </div>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".xls,.xlsx,.csv">
+      <p><strong>クリック</strong>または<strong>ドラッグ&ドロップ</strong>で<br>
+      応募者一覧Excel（.xls / .xlsx / .csv）をアップロード</p>
+    </label>
+  </div>
+
+  <div class="step preview" id="step2">
+    <h2><span class="badge">2</span>データプレビュー</h2>
+    <div id="meta"></div>
+    <div class="stats" id="topStats"></div>
+    <details>
+      <summary>応募者一覧（匿名化済）を表示</summary>
+      <div id="anonTable" style="margin-top:8px;overflow:auto;max-height:300px"></div>
+    </details>
+  </div>
+
+  <div class="step preview" id="step3">
+    <h2><span class="badge">3</span>集計結果</h2>
+    <div class="dist" id="dist"></div>
+  </div>
+
+  <div class="step preview" id="step4">
+    <h2><span class="badge">4</span>内定者プロファイル <span id="offerCount" style="font-size:13px;color:var(--muted);font-weight:400;margin-left:4px"></span></h2>
+    <p class="sub">内定を出した候補者（承諾／辞退含む）の詳細を1人ずつ表示します</p>
+    <div id="offerList" style="margin-top:8px"></div>
+  </div>
+
+  <div class="step preview" id="step5">
+    <h2><span class="badge">5</span>振り返り資料を出力</h2>
+    <p class="sub">A: そのままPDFで保存 / B: Geminiにプロンプトを渡してより高度な総評を生成</p>
+    <div class="btn-row" style="margin:8px 0 16px">
+      <button class="btn" id="pdfBtn" style="background:#10b981">📄 振り返り資料PDFをダウンロード</button>
+    </div>
+    <details>
+      <summary>Gemini向けプロンプト（より柔軟な総評がほしい場合）</summary>
+      <textarea id="prompt" spellcheck="false" style="margin-top:8px"></textarea>
+      <div class="btn-row">
+        <button class="btn" id="copy">プロンプトをコピー</button>
+        <button class="btn btn-ghost" id="openGemini">Geminiを開く</button>
+        <button class="btn btn-ghost" id="download">テキスト保存</button>
+      </div>
+      <div class="note">
+        <strong>Geminiでの使い方（デザインされたスライドPDFを作る流れ）</strong>
+        <ol class="guide">
+          <li><a href="https://gemini.google.com/" target="_blank">Gemini</a>を開く（推奨: 2.5 Pro）</li>
+          <li>送信欄の <strong>「Canvas」</strong> をONにしてから、上のプロンプトを貼り付けて送信<br>
+              <span style="color:var(--muted);font-size:12px">※ Canvasオフだと普通のテキスト返答になりスライドが作れません</span></li>
+          <li>Canvas上に<strong>11枚のスライド</strong>（プレゼンテーション形式）が生成されます</li>
+          <li>Canvas右上の「<strong>Google Slides にエクスポート</strong>」をクリック</li>
+          <li>開いたGoogle Slidesで「<strong>ファイル → ダウンロード → PDFドキュメント (.pdf)</strong>」</li>
+        </ol>
+        <div style="margin-top:8px;padding:8px 10px;background:#dbeafe;border-radius:4px;font-size:12px;color:#1e3a8a">
+          💡 「Canvas → Slides → PDF」の3ステップで、デザインされたプレゼン資料がPDFで手に入ります。<br>
+          シンプルなテンプレ版でよければ、上の <strong>📄 振り返り資料PDFをダウンロード</strong> ボタンで一発出力できます。
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- PDF用テンプレ（オフスクリーン） -->
+<div id="pdfRoot" style="position:absolute;left:-99999px;top:0;width:794px;background:#fff;color:#0f172a;
+     font-family:'Noto Sans JP','Hiragino Sans',-apple-system,sans-serif"></div>
+
+<div class="toast" id="toast">コピーしました</div>
+
+<script>
+// ============ ヘッダーマッピング ============
+const COL = {
+  company:'企業名', listed:'上場有無', job:'求人名', status:'ステータス',
+  accountCreated:'アカウント作成日', entryDate:'エントリー日時', id:'ID',
+  lastName:'姓', firstName:'名', age:'年齢', birth:'生年月日',
+  tag:'タグ', gender:'性別', email:'メールアドレス', phone:'電話番号',
+  country:'居住国', region:'地域',
+  univ:'大学名(最終学歴)', major1:'専攻（学部）', major2:'専攻（学科）',
+  degree:'学位', graduated:'卒業', gradDate:'卒業時期', sciHum:'文理区分',
+  workYears:'フルタイム職務経験年数',
+  jlpt:'日本語 Japanese Skill (JLPT)', jpt:'日本語 Japanese Skill (JPT)',
+  jpNative:'日本語 Japanese Skill (native)',
+  toeic:'英語 English Skill (TOEIC)', toefl:'英語 English Skill (TOEFL)',
+  ielts:'英語 English Skill (IELTS)',
+  hsk:'中国語 Chinese Skill (HSK)', cnNative:'中国語 Chinese Skill (native)',
+  selfPR:'自己PR',
+};
+
+// 重複ヘッダー（学歴/職歴）を位置で取得するためのインデックス検出
+function findEduWorkIndices(headers){
+  const edu = []; // 学歴1-5
+  const work = []; // 職歴1-5
+  const eduMarkers = ['大学名(最終学歴)','大学名(学歴2)','大学名(学歴3)','大学名(学歴4)','大学名(学歴5)'];
+  eduMarkers.forEach(m => {
+    const i = headers.indexOf(m);
+    if (i >= 0) edu.push(i);
+  });
+  // 職歴は「職務経歴」というヘッダの位置を全部取る
+  headers.forEach((h, i) => { if (h === '職務経歴') work.push(i); });
+  return {edu, work};
+}
+
+let CURRENT = null; // 解析済データ
+
+// ============ ファイル読み込み ============
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+drop.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(e =>
+  drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.add('over')}));
+['dragleave','drop'].forEach(e =>
+  drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.remove('over')}));
+drop.addEventListener('drop', ev => {
+  const f = ev.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+      parseData(rows);
+    } catch(err){
+      alert('読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============ データパース ============
+function parseData(rows){
+  if (rows.length < 2){ alert('データが空です'); return; }
+  const headers = rows[0].map(h => String(h||'').trim());
+  const idx = {};
+  Object.entries(COL).forEach(([k,name]) => {
+    idx[k] = headers.indexOf(name);
+  });
+
+  // 学歴2-5、職歴1-5の位置を取得
+  const { edu, work } = findEduWorkIndices(headers);
+
+  const records = [];
+  for (let i=1; i<rows.length; i++){
+    const r = rows[i];
+    if (!r || r.every(c => !c)) continue;
+    const rec = {};
+    Object.entries(idx).forEach(([k,ci]) => {
+      rec[k] = ci >= 0 ? (r[ci] ?? '') : '';
+    });
+    rec._anonId = 'A' + String(i).padStart(3,'0');
+
+    // 学歴を配列化（学歴1=最終学歴、以降は順次）
+    // 各学歴ブロック: 大学名, 国名, 専攻学部, 専攻学科, ダブル(学部), ダブル(学科), 学位, 卒業, 文理 [, 在籍開始, 在籍終了]
+    rec._eduList = edu.map((start, ei) => {
+      const offset = ei === 0 ? 0 : 0;
+      return {
+        univ: r[start] || '',
+        country: r[start+1] || '',
+        major: r[start+2] || '',
+        majorSub: r[start+3] || '',
+        degree: r[start+(ei===0?5:6)] || '',
+        graduated: r[start+(ei===0?6:7)] || '',
+        gradDate: ei===0 ? (r[start+7] || '') : '',
+        sciHum: r[start+(ei===0?8:8)] || '',
+      };
+    }).filter(e => e.univ);
+
+    // 職歴を配列化（職務経歴ブロック10列ずつ: 職務経歴, 会社名, 業種, 事業内容, 職務内容, 職種, ポジション1, ポジション2, 雇用形態, 開始, 終了）
+    rec._workList = work.map(start => ({
+      company: r[start+1] || '',
+      industry: r[start+2] || '',
+      business: r[start+3] || '',
+      duty: r[start+4] || '',
+      jobType: r[start+5] || '',
+      position1: r[start+6] || '',
+      position2: r[start+7] || '',
+      employment: r[start+8] || '',
+      from: r[start+9] || '',
+      to: r[start+10] || '',
+    })).filter(w => w.company);
+
+    records.push(rec);
+  }
+
+  CURRENT = { headers, records };
+  renderAll();
+}
+
+// ============ 表示 ============
+function renderAll(){
+  document.querySelectorAll('.preview').forEach(el => el.classList.add('show'));
+  renderMeta();
+  renderTopStats();
+  renderAnonTable();
+  renderDistributions();
+  renderOffers();
+  renderPrompt();
+}
+
+function renderOffers(){
+  const offers = listOffers(CURRENT.records);
+  document.getElementById('offerCount').textContent = `（${offers.length}名）`;
+  const el = document.getElementById('offerList');
+  if (!offers.length){
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);background:#f8fafc;border-radius:8px">内定者はまだいません</div>`;
+    return;
+  }
+  el.innerHTML = offers.map(r => offerCardHTML(r)).join('');
+}
+
+function renderMeta(){
+  const recs = CURRENT.records;
+  const company = recs[0]?.company || '—';
+  const job = recs[0]?.job || '—';
+  document.getElementById('meta').innerHTML =
+    `<div style="background:#eff6ff;border-radius:8px;padding:12px 16px;margin-bottom:8px">
+       <div style="font-size:12px;color:var(--muted)">企業 / 求人</div>
+       <div style="font-weight:600">${esc(company)}</div>
+       <div style="font-size:13px;color:#334155">${esc(job)}</div>
+     </div>`;
+}
+
+function renderTopStats(){
+  const recs = CURRENT.records;
+  const total = recs.length;
+  const offers = countOffers(recs);
+  const accepted = countAccepted(recs);
+
+  const stats = [
+    {num: total, lbl:'応募総数'},
+    {num: offers, lbl:'内定者数'},
+    {num: accepted, lbl:'内定承諾者数'},
+  ];
+  document.getElementById('topStats').innerHTML = stats.map(s =>
+    `<div class="stat"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`
+  ).join('');
+}
+
+// 内定者 = 内定を出した人全員（承諾/辞退/内定/最終合格）
+function countOffers(recs){
+  return recs.filter(r => ['内定承諾','内定辞退','内定','最終合格'].includes(r.status)).length;
+}
+function countAccepted(recs){
+  return recs.filter(r => r.status === '内定承諾').length;
+}
+function listOffers(recs){
+  return recs.filter(r => ['内定承諾','内定辞退','内定','最終合格'].includes(r.status));
+}
+
+function renderAnonTable(){
+  const recs = CURRENT.records;
+  const cols = [
+    ['ID','_anonId'],['ステータス','status'],['性別','gender'],['年齢','age'],
+    ['居住地','region'],['大学','univ'],['文理','sciHum'],
+    ['JLPT','jlpt'],['TOEIC','toeic'],['職歴年数','workYears']
+  ];
+  const html = `<table><thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead>
+    <tbody>${recs.map(r => `<tr>${cols.map(c=>`<td>${esc(r[c[1]])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  document.getElementById('anonTable').innerHTML = html;
+}
+
+function renderDistributions(){
+  const recs = CURRENT.records;
+  const distros = [
+    {title:'ステータス', data: countBy(recs, r => r.status || '未設定')},
+    {title:'性別', data: countBy(recs, r => r.gender || '未設定')},
+    {title:'年齢層', data: countBy(recs, r => ageGroup(r.age))},
+    {title:'居住地（地域）TOP10', data: topN(countBy(recs, r => r.region || r.country || '未設定'), 10)},
+    {title:'大学名 TOP10', data: topN(countBy(recs, r => univShort(r.univ)), 10)},
+    {title:'文理区分', data: countBy(recs, r => r.sciHum || '未設定')},
+    {title:'JLPT', data: countBy(recs, r => normalizeJLPT(r.jlpt))},
+    {title:'TOEIC帯', data: countBy(recs, r => toeicBand(r.toeic))},
+    {title:'職歴年数', data: countBy(recs, r => workYearsBand(r.workYears))},
+  ];
+  document.getElementById('dist').innerHTML = distros.map(d => distHTML(d.title, d.data)).join('');
+}
+
+function topN(obj, n){
+  const sorted = Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0, n);
+  return Object.fromEntries(sorted);
+}
+function univShort(u){
+  if (!u) return '未記入';
+  // 韓国語/日本語両方ある場合は日本語側を優先
+  const parts = String(u).split(/\s+/);
+  const jp = parts.find(p => /[぀-ヿ一-鿿]/.test(p));
+  return jp || parts[0] || u;
+}
+
+function distHTML(title, data){
+  const entries = Object.entries(data).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(...entries.map(e=>e[1]), 1);
+  return `<div class="dist-card"><h3>${title}</h3>
+    ${entries.map(([k,v]) => `
+      <div class="bar-row">
+        <div title="${esc(k)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k)}</div>
+        <div class="bar-bg"><div class="bar-fg" style="width:${(v/max*100).toFixed(0)}%"></div></div>
+        <div class="bar-num">${v}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ============ 集計ヘルパ ============
+function countBy(arr, fn){
+  const o = {};
+  arr.forEach(x => { const k = fn(x); o[k] = (o[k]||0)+1; });
+  return o;
+}
+function ageGroup(a){
+  const n = parseInt(a); if (!n) return '未設定';
+  if (n < 25) return '~24歳';
+  if (n < 30) return '25-29歳';
+  if (n < 35) return '30-34歳';
+  if (n < 40) return '35-39歳';
+  return '40歳~';
+}
+function normalizeJLPT(v){
+  if (!v) return '未取得/未記入';
+  const s = String(v).toUpperCase();
+  if (s.includes('N1')) return 'N1';
+  if (s.includes('N2')) return 'N2';
+  if (s.includes('N3')) return 'N3';
+  if (s.includes('N4')) return 'N4';
+  if (s.includes('N5')) return 'N5';
+  if (s.includes('NATIVE') || s.includes('ネイティブ')) return 'ネイティブ';
+  return s;
+}
+function toeicBand(v){
+  const n = parseInt(v); if (!n) return '未記入';
+  if (n >= 900) return '900~';
+  if (n >= 800) return '800-899';
+  if (n >= 700) return '700-799';
+  if (n >= 600) return '600-699';
+  return '~599';
+}
+function workYearsBand(v){
+  const n = parseFloat(v); if (isNaN(n) || n === 0) return '未経験/未記入';
+  if (n < 1) return '~1年';
+  if (n < 3) return '1-3年';
+  if (n < 5) return '3-5年';
+  if (n < 10) return '5-10年';
+  return '10年~';
+}
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ============ プロンプト生成 ============
+function renderPrompt(){
+  const recs = CURRENT.records;
+  const company = recs[0]?.company || '—';
+  const job = recs[0]?.job || '—';
+  const total = recs.length;
+
+  // 集計を文字列化
+  const aggSection = [
+    ['ステータス分布', countBy(recs, r => r.status || '未設定')],
+    ['性別分布', countBy(recs, r => r.gender || '未設定')],
+    ['年齢層分布', countBy(recs, r => ageGroup(r.age))],
+    ['居住地分布', countBy(recs, r => r.region || '未設定')],
+    ['文理区分分布', countBy(recs, r => r.sciHum || '未設定')],
+    ['JLPT分布', countBy(recs, r => normalizeJLPT(r.jlpt))],
+    ['TOEIC帯分布', countBy(recs, r => toeicBand(r.toeic))],
+    ['職歴年数分布', countBy(recs, r => workYearsBand(r.workYears))],
+  ].map(([title, d]) => {
+    const lines = Object.entries(d).sort((a,b)=>b[1]-a[1])
+      .map(([k,v]) => `  - ${k}: ${v}名 (${(v/total*100).toFixed(1)}%)`).join('\n');
+    return `### ${title}\n${lines}`;
+  }).join('\n\n');
+
+  // 応募者プロファイル（匿名化、自己PR等は除外）
+  const profileLines = recs.map(r => {
+    const parts = [
+      `ID:${r._anonId}`,
+      `ステータス:${r.status||'-'}`,
+      `${r.gender||'-'}`,
+      `${r.age||'-'}歳`,
+      `${r.region||r.country||'-'}`,
+      `大学:${r.univ||'-'}`,
+      `専攻:${r.major1||'-'}${r.major2?'/'+r.major2:''}`,
+      `${r.sciHum||'-'}`,
+      `${r.degree||'-'}`,
+      `卒業:${formatDate(r.gradDate)||'-'}`,
+      `JLPT:${normalizeJLPT(r.jlpt)}`,
+      r.toeic ? `TOEIC:${r.toeic}` : null,
+      r.hsk ? `HSK:${r.hsk}` : null,
+      `職歴:${r.workYears||0}年`,
+    ].filter(Boolean);
+    return '- ' + parts.join(' | ');
+  }).join('\n');
+
+  // 内定者の詳細プロファイル（個別カード用）
+  const offerRecs = listOffers(recs);
+  const offerDetailBlocks = offerRecs.map(r => {
+    const edu = (r._eduList||[]).map((e,i) => `  - ${i===0?'最終学歴':'学歴'+(i+1)}: ${e.univ}${e.country?` (${e.country})`:''} / ${e.major}${e.majorSub?' '+e.majorSub:''} / ${e.degree||'-'} / ${e.sciHum||'-'}${e.gradDate?` / ${formatDate(e.gradDate)}卒`:''}`).join('\n');
+    const work = (r._workList||[]).map((w,i) => `  - 職歴${i+1}: ${w.company} / ${w.industry||'-'} / ${w.jobType||'-'} ${w.position1?'/ '+w.position1:''} (${formatDate(w.from)} 〜 ${formatDate(w.to)})${w.duty?'\n     職務: '+String(w.duty).slice(0,200):''}`).join('\n');
+    const langs = [r.jlpt&&`JLPT:${normalizeJLPT(r.jlpt)}`, r.toeic&&`TOEIC:${r.toeic}`, r.toefl&&`TOEFL:${r.toefl}`, r.ielts&&`IELTS:${r.ielts}`, r.hsk&&`HSK:${r.hsk}`, r.jpNative&&'日本語ネイティブ', r.cnNative&&'中国語ネイティブ'].filter(Boolean).join(' / ') || '記入なし';
+    return `### ${r._anonId} ｜ ${r.status} ｜ ${r.gender||'-'} / ${r.age||'-'}歳 / ${r.region||r.country||'-'}
+- 学歴:
+${edu || '  - 記入なし'}
+- 語学: ${langs}
+- 職務経験年数: ${r.workYears||0}年
+${work ? '- 職歴:\n'+work : '- 職歴: なし'}`;
+  }).join('\n\n');
+
+  const promptText = `あなたは **株式会社ビーウェルインターナショナル**（運営サービス: **KOREC** — 韓国・台湾人材の日系企業向け新卒/中途人材紹介エージェント）のコンサルタントです。
+以下のデータをもとに、クライアント企業向けの「採用活動振り返りレポート」を、**プレゼンテーション形式の高品質スライド資料**として作成してください。
+
+# 重要: 出力方法（厳守）
+
+Geminiの **Canvas → スライド作成（プレゼンテーション）機能** を使い、**16:9 横向きスライド** を **11枚構成** で生成してください。
+- 出力はそのままGoogle Slidesにエクスポートできる形式
+- ユーザーは完成後、Canvas右上の「Google Slides にエクスポート」→ Slides 上で「ファイル → ダウンロード → PDFドキュメント(.pdf)」でPDF化します
+- ドキュメント形式ではなく **必ずプレゼンテーション形式** で出力
+
+# デザイン原則（重要）
+
+- **配色（白×緑のKORECブランドカラーで統一）**:
+  - ベース: 白 \`#ffffff\` / ライトグレー \`#f5f5f5\`
+  - メインカラー: KOREC緑 \`#10b981\`（強調・アクセント・グラフメインに使用）
+  - ダーク緑: \`#047857\`（見出し・濃いアクセント）
+  - サブカラー: ダークグレー \`#1f2937\`（本文テキスト）/ ミドルグレー \`#6b7280\`（補足テキスト）
+  - 警告アクセント（控えめに）: オレンジ \`#f59e0b\`（注意喚起箇所のみ）
+  - **青系（#1e3a8a, #3b82f6 など）は使用禁止**
+- **表紙**: 白 → KOREC緑 \`#10b981\` の淡いグラデーション、もしくは白背景＋左/右に大きな緑のアクセント図形。上部に緑文字で \`KOREC RECRUITMENT REVIEW\`（letter-spacing広めの大文字）、メインタイトルはダークグレー＋緑の2色
+- **セクション扉ページ**: 白背景、中央寄せレイアウト、緑文字で小さく \`SECTION 01\` / \`SECTION 02\` / \`SECTION 03\`、その下に**極太大見出し**、さらに下に薄いグレーの説明文1〜2行、最下に**緑の短い水平線アクセント**
+- **データページ**: 左上に**縦の緑ライン**＋太字見出し（\`▌採用実績と選考辞退率の現状\` のような体裁）、本文は左寄せでクリーンに
+- **グラフ**: 棒グラフ・横棒グラフ・円グラフを積極活用。**メイン色は緑（#10b981）+ ダーク緑（#047857）+ ライト緑（#a7f3d0）の濃淡で構成**。数字は大きく太字で強調
+- **カード3枚並び**: 白カード＋緑の細いボーダー/アイコン、アイコン + 見出し + 説明文を縦並べ、3枚を横に等間隔配置
+- 数字は **大きく・太字で・緑色で** 強調（特に "47%" や "53名" など主要KPI）
+- 余白を広く取り、白基調でミニマル・上質・清潔感のある印象に
+
+# スライド構成（11枚厳守）
+
+| # | 種別 | 内容 |
+|---|---|---|
+| 1 | 表紙 | 「{企業名} 採用活動振り返りレポート」/ サブ：「KOREC応募者データ(N={応募総数}名)に基づく採用成果・歩留まりの徹底検証、および次回採用成功率向上に向けたプロセス改善のご提案」/ 下部メタ：対象企業・分析母集団・作成日 |
+| 2 | SECTION 01 扉 | 「全体選考状況と求人別データ」/ 説明：「エントリーから選考プロセス、最終結果までの進捗内訳を整理し、採用活動の歩留まりに関する現状の全体像を把握します。」 |
+| 3 | データ | 「採用実績と選考辞退率の現状」— 左に大きな緑カードで **{選考辞退率}% 選考辞退率（計{N}名）**、右に考察テキスト（4〜5行） |
+| 4 | データ | 「選考ステータス別の応募者数」— 横棒グラフ（選考辞退/不採用/選考中/内定）、下に1行考察 |
+| 5 | データ | 「ポジション別の選考歩留まり一覧」— テーブル形式（募集ポジション × 応募/選考中/不採用/辞退/内定承諾/内定辞退） |
+| 6 | データ | 「募集ポジション別の傾向と考察」— 左にポジション別の考察文（アイコン付き見出し）、右に職場/オフィス写真 |
+| 7 | SECTION 02 扉 | 「応募者属性とペルソナ分析」/ 説明：「どのような層へアプローチが届いていたかを定量・定性データで分析し、自社求人と市場価値の高いターゲット像を照らし合わせます。」 |
+| 8 | データ | 「応募者の高い日本語力（JLPT）」— 円グラフ（N1/N2/N3）、凡例を右側に、下に考察1〜2行 |
+| 9 | データ | 「応募者の年齢・学歴構成」— 左に箇条書き（平均年齢/文理/学歴）、右に多様性のある人物写真 |
+| 10 | SECTION 03 扉 | 「主要課題と次回への改善提案」/ 説明：「今回の採用活動で得られた気付きを活かし、歩留まりを上げ、競合に負けない採用プロセスを確立するための道筋を提示します。」 |
+| 11 | データ | 「採用成功率を向上させる3つの改善」— カード3枚並び（カジュアル面談の導入 / 選考スピードの迅速化 / 求人要件の明確化）、各カードはアイコン+見出し+4〜5行説明 |
+
+**作らないスライド（厳禁）**:
+- ❌「Questions?」「お問い合わせ」「ありがとうございました」のような締めスライド
+- ❌「Image Sources」「画像出典」など参考資料一覧スライド
+
+最後の中身スライド（11枚目=3つの改善）で内容として完結させてください。
+
+# フッター（全スライド必須）
+
+**表紙以外の全スライド下部に、以下のフッターを必ず配置してください**：
+- 左下に小さく薄いグレー文字: \`株式会社ビーウェルインターナショナル\`
+- 右下に小さく緑文字: \`KOREC\`（letter-spacing広め、太字）
+- 中央下: ページ番号（任意）
+
+表紙には「株式会社ビーウェルインターナショナル」をクレジット表記として大きめに入れてください。
+
+# 厳守ルール
+
+- 個人を特定する情報（氏名・電話・メール）は絶対に含めない（IDで参照）
+- 居住地・大学名はTOP10までに絞る
+- 表紙左上に \`KOREC RECRUITMENT REVIEW\`
+- **表紙以外の全スライドのフッターに「株式会社ビーウェルインターナショナル」と「KOREC」を必ず配置**
+- スライド本文は読みやすい日本語、短く、太字とハイライトを多用
+- グラフ・テーブルは見やすいフラットデザイン、配色は上記の **白×緑** で統一（青系は使わない）
+- ストック写真使用OK。ただし最終に Image Sources スライドは作らない（フッタークレジット表記程度で十分）
+
+## 対象案件
+- **企業名**: ${company}
+- **求人名**: ${job}
+- **応募総数**: ${total}名
+- **データ抽出日**: ${new Date().toISOString().slice(0,10)}
+
+## 集計データ
+
+${aggSection}
+
+## 応募者プロファイル（匿名化済）
+
+${profileLines}
+
+## 内定者の詳細プロファイル（1人1ブロック）
+
+${offerDetailBlocks || '（内定者なし）'}
+
+## 各スライドで深掘りすべき観点
+
+- **歩留まり分析**: 主要な離脱フェーズと推定要因（他社競合、選考スピード、業務イメージのギャップ等）
+- **属性分析**: 求める水準（理工系・日本語N2以上など）と実応募者の文理/専攻/語学のギャップを明示
+- **3つの改善**: 数字根拠を1行入れ、誰でも次のアクションに移れる具体性で
+- **内定者プロファイル**: 必要なら別途データページ追加可（基本11枚構成は崩さない）
+
+# 出力開始の合図
+
+それでは **Canvas（プレゼンテーション/スライド形式）** を開き、上記11枚のスライド資料を作成してください。
+完成したら、ユーザーが Canvas → Google Slides → ファイル → ダウンロード → PDF の流れでPDF化します。`;
+
+  document.getElementById('prompt').value = promptText;
+}
+
+function formatDate(d){
+  if (!d) return '';
+  const s = String(d);
+  // 既に文字列ならそのまま、yyyy-mm のみ
+  const m = s.match(/(\d{4})[-/](\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2,'0')}` : s.slice(0,7);
+}
+
+// ============ アクション ============
+document.getElementById('copy').addEventListener('click', async () => {
+  const ta = document.getElementById('prompt');
+  const text = ta.value;
+  if (!text){ showToast('まずExcelファイルを読み込んでください'); return; }
+  // 1) Clipboard API (HTTPS or localhost 必須)
+  try {
+    if (navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      showToast(`✓ プロンプトをコピーしました（${text.length.toLocaleString()}文字）`);
+      return;
+    }
+  } catch(e){ /* fall through */ }
+  // 2) execCommand フォールバック
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  try {
+    const ok = document.execCommand('copy');
+    if (ok){
+      showToast(`✓ プロンプトをコピーしました（${text.length.toLocaleString()}文字）`);
+      return;
+    }
+  } catch(e){ /* fall through */ }
+  // 3) 最終手段：選択状態にして「Cmd+Cを押してください」と案内
+  ta.focus(); ta.select();
+  showToast('テキストを選択しました。⌘+C / Ctrl+C でコピーしてください');
+});
+document.getElementById('openGemini').addEventListener('click', () => {
+  window.open('https://gemini.google.com/', '_blank');
+});
+document.getElementById('download').addEventListener('click', () => {
+  const txt = document.getElementById('prompt').value;
+  const blob = new Blob([txt], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'korec_review_prompt.txt';
+  a.click(); URL.revokeObjectURL(url);
+});
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// ============ PDF生成 ============
+document.getElementById('pdfBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true; btn.textContent = '⏳ PDF生成中...';
+  try {
+    const root = document.getElementById('pdfRoot');
+    root.innerHTML = buildPdfHTML();
+    // 一時的にonscreenへ（html2canvasがオフスクリーン要素のレンダリングで問題を起こすため）
+    const origStyle = root.getAttribute('style');
+    root.setAttribute('style', 'position:fixed;left:-99999px;top:0;width:794px;background:#fff;color:#0f172a;font-family:"Noto Sans JP","Hiragino Sans",-apple-system,sans-serif');
+    const company = CURRENT.records[0]?.company || 'KOREC';
+    const fname = `KOREC振り返り_${company}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const pages = Array.from(root.querySelectorAll('.pdf-page'));
+    // 各 .pdf-page を個別にcanvas化してPDFに追加する方式
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'mm', format:'a4', orientation:'portrait'});
+    const pageW = 210, pageH = 297;
+    for (let i=0; i<pages.length; i++){
+      const canvas = await html2canvas(pages[i], {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      const imgW = pageW;
+      const imgH = canvas.height * (pageW / canvas.width);
+      if (i>0) doc.addPage();
+      doc.addImage(imgData, 'JPEG', 0, 0, imgW, Math.min(imgH, pageH));
+    }
+    doc.save(fname);
+    root.setAttribute('style', origStyle);
+    showToast('PDFをダウンロードしました');
+  } catch(e){
+    alert('PDF生成エラー: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📄 振り返り資料PDFをダウンロード';
+  }
+});
+
+function buildPdfHTML(){
+  const recs = CURRENT.records;
+  const company = recs[0]?.company || '—';
+  const job = recs[0]?.job || '—';
+  const total = recs.length;
+  const today = new Date().toISOString().slice(0,10);
+
+  const byStatus = countBy(recs, r => r.status || '未設定');
+  const ongoing = byStatus['選考中'] || 0;
+  const accepted = byStatus['内定承諾'] || 0;
+  const declined = (byStatus['辞退']||0) + (byStatus['内定辞退']||0) + (byStatus['選考辞退']||0);
+  const rejected = byStatus['不採用'] || 0;
+
+  // 内定者抽出（承諾/辞退/内定/最終合格を含む）
+  const winners = listOffers(recs);
+  const winnersAccepted = winners.filter(r => r.status === '内定承諾');
+
+  const distBlock = (title, data) => {
+    const entries = Object.entries(data).sort((a,b)=>b[1]-a[1]);
+    const max = Math.max(...entries.map(e=>e[1]), 1);
+    return `<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">${title}</div>
+      ${entries.map(([k,v]) => `
+        <div style="display:grid;grid-template-columns:130px 1fr 50px;gap:8px;align-items:center;font-size:11px;margin-bottom:3px">
+          <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k)}</div>
+          <div style="background:#e2e8f0;border-radius:3px;height:8px;overflow:hidden">
+            <div style="background:#2563eb;height:100%;width:${(v/max*100).toFixed(0)}%"></div>
+          </div>
+          <div style="text-align:right;color:#64748b">${v} (${(v/total*100).toFixed(0)}%)</div>
+        </div>`).join('')}
+    </div>`;
+  };
+
+  // 表紙
+  const cover = `
+    <div class="pdf-page" style="height:1080px;padding:60px 50px;display:flex;flex-direction:column;
+                background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%);color:#fff">
+      <div style="font-size:14px;letter-spacing:4px;opacity:.85">KOREC RECRUITMENT REVIEW</div>
+      <div style="margin-top:auto">
+        <div style="font-size:14px;opacity:.85;margin-bottom:8px">採用活動 振り返りレポート</div>
+        <div style="font-size:32px;font-weight:700;line-height:1.3;margin-bottom:16px">${esc(company)}</div>
+        <div style="font-size:16px;opacity:.9;line-height:1.5;border-left:3px solid #fff;padding-left:14px">
+          ${esc(job)}
+        </div>
+        <div style="margin-top:40px;display:flex;gap:32px;font-size:13px;flex-wrap:wrap">
+          <div><div style="opacity:.7;margin-bottom:4px">応募総数</div><div style="font-size:28px;font-weight:700">${total}<span style="font-size:14px;font-weight:400">名</span></div></div>
+          <div><div style="opacity:.7;margin-bottom:4px">内定者数</div><div style="font-size:28px;font-weight:700">${winners.length}<span style="font-size:14px;font-weight:400">名</span></div></div>
+          <div><div style="opacity:.7;margin-bottom:4px">内定承諾者数</div><div style="font-size:28px;font-weight:700">${winnersAccepted.length}<span style="font-size:14px;font-weight:400">名</span></div></div>
+          <div><div style="opacity:.7;margin-bottom:4px">データ抽出日</div><div style="font-size:16px;font-weight:600;margin-top:8px">${today}</div></div>
+        </div>
+      </div>
+      <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:end;font-size:11px;opacity:.85">
+        <div>株式会社ビーウェルインターナショナル</div>
+        <div>KOREC</div>
+      </div>
+    </div>`;
+
+  // サマリー
+  const summary = `
+    <div class="pdf-page" style="padding:30px 36px 50px;page-break-before:always;position:relative">
+      <h1 style="font-size:22px;margin:0 0 4px;color:#0f172a">エグゼクティブサマリー</h1>
+      <div style="height:3px;width:48px;background:#ef4444;margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px">
+        ${[
+          ['応募総数', total, '#2563eb'],
+          ['内定者数', winners.length, '#f59e0b'],
+          ['内定承諾者数', winnersAccepted.length, '#10b981'],
+        ].map(([l,n,c]) => `
+          <div style="background:#f8fafc;border-left:4px solid ${c};padding:12px 14px;border-radius:4px">
+            <div style="font-size:11px;color:#64748b">${l}</div>
+            <div style="font-size:26px;font-weight:700;color:${c}">${n}</div>
+          </div>`).join('')}
+      </div>
+      <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:4px;font-size:12px;line-height:1.7">
+        <strong>本資料の構成</strong><br>
+        1. 応募者属性分析（性別・年齢・地域・大学・文理）<br>
+        2. 語学スキル分布（JLPT・TOEIC）<br>
+        3. 職務経験プロファイル<br>
+        4. 選考プロセス分析<br>
+        5. 内定者プロファイル<br>
+        6. KORECからの総評・次回提案
+      </div>
+    </div>`;
+
+  // 属性分析
+  const attrs = `
+    <div class="pdf-page" style="padding:30px 36px 50px;page-break-before:always;position:relative">
+      <h1 style="font-size:20px;margin:0 0 4px">1. 応募者属性分析</h1>
+      <div style="height:3px;width:48px;background:#ef4444;margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          ${distBlock('性別', countBy(recs, r => r.gender || '未設定'))}
+          ${distBlock('年齢層', countBy(recs, r => ageGroup(r.age)))}
+          ${distBlock('文理区分', countBy(recs, r => r.sciHum || '未設定'))}
+        </div>
+        <div>
+          ${distBlock('居住地（地域）TOP10', topN(countBy(recs, r => r.region || r.country || '未設定'), 10))}
+          ${distBlock('大学名 TOP10', topN(countBy(recs, r => univShort(r.univ)), 10))}
+        </div>
+      </div>
+    </div>`;
+
+  // 語学・職歴
+  const skills = `
+    <div class="pdf-page" style="padding:30px 36px 50px;page-break-before:always;position:relative">
+      <h1 style="font-size:20px;margin:0 0 4px">2. 語学スキル & 職務経験</h1>
+      <div style="height:3px;width:48px;background:#ef4444;margin-bottom:18px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          ${distBlock('JLPT', countBy(recs, r => normalizeJLPT(r.jlpt)))}
+          ${distBlock('TOEIC帯', countBy(recs, r => toeicBand(r.toeic)))}
+        </div>
+        <div>
+          ${distBlock('職歴年数', countBy(recs, r => workYearsBand(r.workYears)))}
+          ${distBlock('ステータス', countBy(recs, r => r.status || '未設定'))}
+        </div>
+      </div>
+    </div>`;
+
+  // 内定者プロファイル（1人1ブロック詳細）
+  const winnerCards = winners.length
+    ? winners.map(r => offerCardHTML(r)).join('')
+    : `<div style="padding:24px;text-align:center;color:#94a3b8">内定者はまだいません</div>`;
+
+  const winnerPage = `
+    <div class="pdf-page" style="padding:30px 36px 50px;page-break-before:always;position:relative">
+      <h1 style="font-size:20px;margin:0 0 4px">3. 内定者プロファイル <span style="font-size:13px;color:#64748b;font-weight:400">（${winners.length}名 / 個人名は伏せています）</span></h1>
+      <div style="height:3px;width:48px;background:#ef4444;margin-bottom:18px"></div>
+      ${winnerCards}
+    </div>`;
+
+  // 総評（テンプレ）
+  const insight = `
+    <div class="pdf-page" style="padding:30px 36px 50px;page-break-before:always;position:relative">
+      <h1 style="font-size:20px;margin:0 0 4px">4. KORECからの総評</h1>
+      <div style="height:3px;width:48px;background:#ef4444;margin-bottom:18px"></div>
+      <div style="font-size:12px;line-height:1.8;color:#334155">
+        <p>本求人「${esc(job)}」では、合計<strong>${total}名</strong>の応募がございました。
+        うち<strong>${ongoing}名</strong>が選考継続中、<strong>${accepted}名</strong>が内定承諾、<strong>${declined+rejected}名</strong>が辞退/不採用となっております。</p>
+        <h3 style="font-size:14px;color:#1e3a8a;margin:18px 0 6px">応募者プロファイルの特徴</h3>
+        <ul style="margin:0;padding-left:20px">
+          <li>主要層: ${topKey(countBy(recs, r => ageGroup(r.age)))} の年齢帯、${topKey(countBy(recs, r => r.sciHum || '未設定'))}系が中心</li>
+          <li>居住地: ${topKey(countBy(recs, r => r.region || r.country || '—'))} が最多</li>
+          <li>日本語: ${topKey(countBy(recs, r => normalizeJLPT(r.jlpt)))} 層が中心</li>
+        </ul>
+        <h3 style="font-size:14px;color:#1e3a8a;margin:18px 0 6px">次回採用に向けたご提案</h3>
+        <ul style="margin:0;padding-left:20px">
+          <li>応募チャネル・媒体の選定: 今回の集まり層を踏まえ、ターゲットに合った媒体強化を検討</li>
+          <li>選考プロセスの最適化: 主要離脱フェーズを特定し、面接日程・連絡頻度の改善余地を協議</li>
+          <li>採用要件の解像度向上: 求める語学水準・専攻領域を再定義し、母集団の質向上を図る</li>
+        </ul>
+        <div style="margin-top:24px;padding:14px;background:#eff6ff;border-radius:6px;font-size:11px;color:#1e3a8a">
+          ※ より詳細な総評・打ち手をご希望の場合、KOREC担当までお申し付けください。
+        </div>
+      </div>
+    </div>`;
+
+  // フッター（表紙以外の各ページに差し込む）
+  const FOOTER = `
+    <div style="position:absolute;left:36px;right:36px;bottom:14px;display:flex;justify-content:space-between;
+                align-items:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px">
+      <div>株式会社ビーウェルインターナショナル</div>
+      <div style="font-weight:700;letter-spacing:2px;color:#2563eb">KOREC</div>
+    </div>`;
+  const withFooter = html => html.replace(/<\/div>(\s*)$/, FOOTER + '</div>$1');
+
+  return cover + withFooter(summary) + withFooter(attrs) + withFooter(skills) +
+         withFooter(winnerPage) + withFooter(insight);
+}
+
+function topKey(obj){
+  const e = Object.entries(obj).sort((a,b)=>b[1]-a[1])[0];
+  return e ? e[0] : '—';
+}
+
+
+function offerCardHTML(r){
+  const statusColor = {'内定承諾':'#10b981','内定辞退':'#94a3b8','内定':'#f59e0b','最終合格':'#3b82f6'}[r.status] || '#64748b';
+  const eduRows = (r._eduList || []).map((e, i) => `
+    <tr><td style="padding:3px 6px;color:#64748b;width:80px">${i===0?'最終学歴':'学歴'+(i+1)}</td>
+      <td style="padding:3px 6px">
+        <strong>${esc(e.univ)}</strong>${e.country?` <span style="color:#94a3b8">(${esc(e.country)})</span>`:''}
+        <span style="color:#475569"> / ${esc(e.major)}${e.majorSub?' '+esc(e.majorSub):''}</span>
+        ${e.degree?` <span style="background:#e2e8f0;padding:1px 6px;border-radius:3px;font-size:9px">${esc(e.degree)}</span>`:''}
+        ${e.sciHum?` <span style="background:#dbeafe;padding:1px 6px;border-radius:3px;font-size:9px">${esc(e.sciHum)}</span>`:''}
+        ${e.gradDate?` <span style="color:#94a3b8;font-size:9px">${esc(formatDate(e.gradDate))}卒</span>`:''}
+      </td></tr>`).join('');
+
+  const workRows = (r._workList || []).map((w, i) => `
+    <tr><td style="padding:3px 6px;color:#64748b;width:80px">職歴${i+1}</td>
+      <td style="padding:3px 6px">
+        <strong>${esc(w.company)}</strong>
+        ${w.industry?` <span style="color:#475569">/ ${esc(w.industry)}</span>`:''}
+        ${w.jobType?` <span style="color:#475569">/ ${esc(w.jobType)}</span>`:''}
+        ${w.position1?` <span style="background:#fef3c7;padding:1px 6px;border-radius:3px;font-size:9px">${esc(w.position1)}</span>`:''}
+        ${w.employment?` <span style="background:#e2e8f0;padding:1px 6px;border-radius:3px;font-size:9px">${esc(w.employment)}</span>`:''}
+        <div style="color:#94a3b8;font-size:9px;margin-top:2px">${esc(formatDate(w.from))} 〜 ${esc(formatDate(w.to))}</div>
+        ${w.duty?`<div style="color:#475569;font-size:9px;margin-top:2px;line-height:1.4">${esc(String(w.duty).slice(0,160))}${String(w.duty).length>160?'…':''}</div>`:''}
+      </td></tr>`).join('');
+
+  const langs = [
+    r.jlpt ? `JLPT: ${normalizeJLPT(r.jlpt)}` : null,
+    r.jpt ? `JPT: ${r.jpt}` : null,
+    r.jpNative ? `日本語ネイティブ` : null,
+    r.toeic ? `TOEIC: ${r.toeic}` : null,
+    r.toefl ? `TOEFL: ${r.toefl}` : null,
+    r.ielts ? `IELTS: ${r.ielts}` : null,
+    r.hsk ? `HSK: ${r.hsk}` : null,
+    r.cnNative ? `中国語ネイティブ` : null,
+  ].filter(Boolean).join(' / ') || '記入なし';
+
+  return `
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:18px;font-weight:700;color:#2563eb">${r._anonId}</div>
+          <div style="font-size:11px;color:#64748b">${esc(r.gender||'-')} / ${esc(r.age||'-')}歳 / ${esc(r.region||r.country||'-')}</div>
+        </div>
+        <div style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600">${esc(r.status)}</div>
+      </div>
+      <table style="width:100%;font-size:10px;border-collapse:collapse">
+        ${eduRows}
+        <tr><td style="padding:3px 6px;color:#64748b">語学</td>
+          <td style="padding:3px 6px">${esc(langs)}</td></tr>
+        <tr><td style="padding:3px 6px;color:#64748b">職務経験</td>
+          <td style="padding:3px 6px">${esc(r.workYears||0)}年</td></tr>
+        ${workRows}
+      </table>
+    </div>`;
+}
+</script>
+</body>
+</html>
