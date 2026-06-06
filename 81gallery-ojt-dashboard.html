@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OJT週次アンケート ダッシュボード｜81GALLERY（ラドルフ26）</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1e2440; --line:#2a3052;
+    --txt:#e8ebf5; --sub:#9aa3c4; --muted:#6b739a;
+    --accent:#6c8cff; --good:#3ddc97; --warn:#ffb454; --bad:#ff6b81;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--txt);
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1280px; margin:0 auto; padding:28px 20px 80px}
+  header.top{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:24px}
+  h1{font-size:23px; margin:0 0 4px; letter-spacing:.02em}
+  .sub{color:var(--sub); font-size:13px}
+  .meta{color:var(--muted); font-size:12px; text-align:right}
+  .badge{display:inline-block; background:var(--panel2); border:1px solid var(--line); color:var(--sub); border-radius:999px; padding:3px 10px; font-size:11px; margin-left:6px}
+
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:26px}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px 18px}
+  .kpi .label{color:var(--sub); font-size:12px; margin-bottom:6px}
+  .kpi .val{font-size:30px; font-weight:700; line-height:1.1}
+  .kpi .val small{font-size:14px; color:var(--muted); font-weight:500}
+  .kpi .delta{font-size:12px; margin-top:4px}
+  .up{color:var(--good)} .down{color:var(--bad)} .flat{color:var(--muted)}
+  .kpi.alert .val{color:var(--warn)}
+
+  section{margin-bottom:30px}
+  .sec-h{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px}
+  .sec-h h2{font-size:17px; margin:0; font-weight:700}
+  .sec-h .hint{color:var(--muted); font-size:12px}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .chart-box{position:relative; height:300px}
+
+  .controls{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px}
+  .chip{background:var(--panel2); border:1px solid var(--line); color:var(--sub); border-radius:999px;
+        padding:6px 14px; font-size:13px; cursor:pointer; transition:.15s; user-select:none}
+  .chip:hover{border-color:var(--accent); color:var(--txt)}
+  .chip.on{background:var(--accent); border-color:var(--accent); color:#0b0e1c; font-weight:700}
+
+  .cards{display:grid; grid-template-columns:repeat(5,1fr); gap:14px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:15px; display:flex; flex-direction:column; gap:10px}
+  .card .name{font-size:15px; font-weight:700}
+  .card .name span{display:block; font-size:10px; color:var(--muted); font-weight:500; margin-top:2px}
+  .scorerow{display:flex; gap:7px}
+  .score{flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 6px; text-align:center}
+  .score .t{font-size:10px; color:var(--sub)}
+  .score .n{font-size:19px; font-weight:700}
+  .score .n small{font-size:10px; color:var(--muted); font-weight:500}
+  .spark{height:60px; position:relative}
+  .trline{font-size:11px; color:var(--sub); border-top:1px dashed var(--line); padding-top:7px}
+  .trline b{color:var(--txt)}
+  .gapnote{font-size:11px; color:var(--sub)}
+  .latest{font-size:11.5px; color:var(--sub); border-top:1px dashed var(--line); padding-top:7px}
+  .latest b{color:var(--txt); font-weight:600}
+
+  .timeline{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .tl-col h3{font-size:13px; color:var(--sub); margin:0 0 10px; font-weight:700}
+  .tl-list{display:flex; flex-direction:column; gap:10px; max-height:560px; overflow:auto; padding-right:6px}
+  .tl-item{background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:10px; padding:10px 12px}
+  .tl-item.concern{border-left-color:var(--warn); background:#241f1a}
+  .tl-item .tl-top{display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px}
+  .tl-item .who{color:var(--txt); font-weight:600}
+  .tl-item .sc{font-variant-numeric:tabular-nums}
+  .tl-item .body{font-size:13px; color:var(--txt); white-space:pre-wrap; word-break:break-word}
+  .flagtag{display:inline-block; background:#3a2c12; color:var(--warn); border-radius:6px; padding:1px 7px; font-size:10px; margin-right:6px}
+
+  .alerts{display:flex; flex-direction:column; gap:10px}
+  .alert-item{display:flex; gap:12px; align-items:flex-start; background:#241f1a; border:1px solid #4a3a1c; border-radius:12px; padding:12px 14px}
+  .alert-item .ico{font-size:18px}
+  .alert-item .who{font-weight:700}
+  .alert-item .msg{font-size:13px; color:var(--sub)}
+  .alert-item.ok{background:#15291f; border-color:#1f4733}
+  .alert-item.ok .ico{color:var(--good)}
+
+  .legend{display:flex; gap:14px; font-size:12px; color:var(--sub); margin-bottom:8px; flex-wrap:wrap}
+  .legend .k{display:inline-flex; align-items:center; gap:6px}
+  .dot{width:10px; height:10px; border-radius:3px; display:inline-block}
+
+  footer{color:var(--muted); font-size:12px; text-align:center; margin-top:40px; border-top:1px solid var(--line); padding-top:20px}
+  .scale-note{color:var(--muted); font-size:11px}
+
+  /* パスワードゲート */
+  #gate{position:fixed; inset:0; background:#0b0e1c; display:flex; align-items:center; justify-content:center; z-index:9999}
+  .gate-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px 30px; width:340px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .gate-card h2{margin:0 0 6px; font-size:18px}
+  .gate-card p{color:var(--sub); font-size:13px; margin:0 0 18px}
+  .gate-card input{width:100%; padding:11px 14px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; color:var(--txt); font-size:15px; margin-bottom:12px}
+  .gate-card input:focus{outline:none; border-color:var(--accent)}
+  .gate-card button{width:100%; padding:11px; background:var(--accent); color:#0b0e1c; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer}
+  .gate-card button:disabled{opacity:.5; cursor:wait}
+  #gate-err{color:var(--bad); font-size:12px; margin-top:10px; min-height:16px}
+  .gate-note{color:var(--muted); font-size:11px; margin-top:16px}
+
+  @media(max-width:1080px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .grid2{grid-template-columns:1fr}
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .timeline{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <h2>🔒 OJTダッシュボード</h2>
+    <p>閲覧にはパスワードが必要です<br>81GALLERY（ラドルフ26）</p>
+    <input id="gate-pw" type="password" placeholder="パスワード" autocomplete="current-password">
+    <button id="gate-btn">表示する</button>
+    <div id="gate-err"></div>
+    <div class="gate-note">社長・人事 閲覧用。データはパスワードで暗号化されています。</div>
+  </div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+
+  <header class="top">
+    <div>
+      <h1>OJT週次アンケート ダッシュボード <span class="badge">81GALLERY ／ ラドルフ26</span></h1>
+      <div class="sub">新入社員（自己申告）×トレーナー報告 の週次アンケート結果サマリー（社長・人事 閲覧用）</div>
+    </div>
+    <div class="meta">
+      データ範囲：<b id="m-range"></b><br>
+      最終更新：<b id="m-updated"></b>　／　回答数：<b id="m-count"></b>件<br>
+      <span class="scale-note">スコアは1〜5の5段階（3＝ふつう）</span>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <div class="sec-h">
+      <h2>📈 推移トレンド（週次・全体平均）</h2>
+      <span class="hint">新人を選ぶと個人別に切り替わります</span>
+    </div>
+    <div class="controls" id="trend-chips"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div style="font-size:13px;color:var(--txt);font-weight:700;margin-bottom:6px">🟦 新入社員 自己申告</div>
+        <div class="legend">
+          <span class="k"><span class="dot" style="background:#6c8cff"></span>モチベーション</span>
+          <span class="k"><span class="dot" style="background:#ffb454"></span>業務理解</span>
+          <span class="k"><span class="dot" style="background:#3ddc97"></span>成長実感</span>
+        </div>
+        <div class="chart-box"><canvas id="ch-self"></canvas></div>
+      </div>
+      <div class="panel">
+        <div style="font-size:13px;color:var(--txt);font-weight:700;margin-bottom:6px">🟩 トレーナー報告</div>
+        <div class="legend">
+          <span class="k"><span class="dot" style="background:#6c8cff"></span>モチベーション</span>
+          <span class="k"><span class="dot" style="background:#c98cff"></span>勤務姿勢</span>
+          <span class="k"><span class="dot" style="background:#3ddc97"></span>習熟度進捗</span>
+        </div>
+        <div class="chart-box"><canvas id="ch-trainer"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <h2>🧑‍🤝‍🧑 新人別サマリー</h2>
+      <span class="hint">自己申告（最新）＋トレーナーから見た最新評価</span>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <h2>⚖️ 自己評価 vs トレーナー評価（期間平均）</h2>
+      <span class="hint">本人の手応えと周囲の見え方のズレを把握</span>
+    </div>
+    <div class="panel">
+      <div class="chart-box" style="height:340px"><canvas id="ch-gap"></canvas></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <h2>🚩 注目ポイント（自動抽出）</h2>
+      <span class="hint">低スコア（2以下）・低下傾向・体調/ネガティブ等の記述を検知</span>
+    </div>
+    <div class="panel"><div class="alerts" id="alerts"></div></div>
+  </section>
+
+  <section>
+    <div class="sec-h">
+      <h2>💬 コメント・申し送りタイムライン</h2>
+      <span class="hint">新人を選ぶと絞り込めます</span>
+    </div>
+    <div class="controls" id="tl-chips"></div>
+    <div class="panel">
+      <div class="timeline">
+        <div class="tl-col">
+          <h3>🟦 新入社員の声（自己申告メモ）</h3>
+          <div class="tl-list" id="tl-self"></div>
+        </div>
+        <div class="tl-col">
+          <h3>🟩 トレーナーの声（申し送り）</h3>
+          <div class="tl-list" id="tl-trainer"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    81GALLERY（ラドルフ26）OJT週次アンケート ／ データソース：「ラドルフ26 トレーナー報告（回答）」スプレッドシート<br>
+    このページは2026/06/06時点のスナップショットです。最新化するには再生成、または自動更新（ライブ接続）の設定が必要です。
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   暗号化データ（AES-GCM, パスワードで復号）
+============================================================ */
+const ENC = {"salt":"OjzP9Fhx8B+XCGJiCZOUPQ==","iv":"d8c3PFEg+GD84shF","iter":200000,"ct":"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"};
+let MEMBERS, FULLNAME, MCOLOR, SELF, TRAINER, META_UPDATED, WEEKS;
+
+function b64ToBytes(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
+async function decryptData(pw){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:b64ToBytes(ENC.salt), iterations:ENC.iter, hash:'SHA-256'},
+    baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(ENC.iv)}, key, b64ToBytes(ENC.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+/* ============================================================
+   週バケット（提出日→その週の月曜ラベル）
+============================================================ */
+function weekInfo(dStr){
+  const [y,mo,da] = dStr.split('/').map(Number);
+  const dt = new Date(y, mo-1, da);
+  const off = (dt.getDay()+6)%7;
+  dt.setDate(dt.getDate()-off);
+  return {ts:dt.getTime(), label:`${dt.getMonth()+1}/${dt.getDate()}`};
+}
+function computeWeeks(){
+  [...SELF, ...TRAINER].forEach(r=>{ const w=weekInfo(r.d); r._w=w.label; r._ts=w.ts; });
+  const map=new Map();
+  [...SELF,...TRAINER].forEach(r=>map.set(r._w, r._ts));
+  WEEKS = [...map.entries()].sort((a,b)=>a[1]-b[1]).map(e=>e[0]);
+}
+
+/* ============================================================ 集計 ============================================================ */
+const wIndex = w => WEEKS.indexOf(w);
+const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+const rnd = v => v==null?null:+v.toFixed(2);
+function weeklyByMember(data, member, key){
+  return WEEKS.map(w=>{ const v=data.filter(d=>d.m===member && d._w===w).map(d=>d[key]); return v.length?rnd(avg(v)):null; });
+}
+function weeklyOverall(data, key){
+  return WEEKS.map(w=>{ const v=data.filter(d=>d._w===w && MEMBERS.includes(d.m)).map(d=>d[key]); return v.length?rnd(avg(v)):null; });
+}
+function memberAvg(data, member, key){ const v=data.filter(d=>d.m===member).map(d=>d[key]); return v.length?rnd(avg(v)):null; }
+function latestVal(data, member, key){
+  for(let i=WEEKS.length-1;i>=0;i--){ const v=data.filter(d=>d.m===member && d._w===WEEKS[i]).map(d=>d[key]); if(v.length) return {w:WEEKS[i], v:rnd(avg(v))}; }
+  return {w:null, v:null};
+}
+function prevVal(data, member, key, beforeWeek){
+  for(let i=wIndex(beforeWeek)-1;i>=0;i--){ const v=data.filter(d=>d.m===member && d._w===WEEKS[i]).map(d=>d[key]); if(v.length) return rnd(avg(v)); }
+  return null;
+}
+
+/* ============================================================ 注目ポイント判定 ============================================================ */
+const FLAG_WORDS = ["体調不良","ネガティブ","フォローは必要","フォローが必要","間に合わない","間に合わな","キツく","不安","心配","疲れ","遅れ","気をつけ"];
+const isConcernText = t => t && FLAG_WORDS.some(w=>t.includes(w));
+function lowScore(d){ const ks=('und' in d)?['mot','und','gro']:['mot','att','prg']; return ks.some(k=>d[k]!=null && d[k]<=2); }
+const isConcernRow = d => lowScore(d) || isConcernText(d.note);
+function countConcerns(){ return [...SELF, ...TRAINER].filter(d=>isConcernRow(d)).length; }
+
+/* ============================================================ KPI ============================================================ */
+function memberAvgAll(data,key){ return rnd(avg(data.filter(d=>MEMBERS.includes(d.m)).map(d=>d[key]))); }
+function renderKPIs(){
+  document.getElementById('m-range').textContent = "2026/04/21 〜 06/06";
+  document.getElementById('m-updated').textContent = META_UPDATED;
+  document.getElementById('m-count').textContent = SELF.length + TRAINER.length;
+  const selfMotW = weeklyOverall(SELF,'mot');
+  const selfGroW = weeklyOverall(SELF,'gro');
+  let last=-1, prev=-1;
+  for(let i=WEEKS.length-1;i>=0;i--){ if(selfMotW[i]!=null){ if(last<0) last=i; else { prev=i; break; } } }
+  const allSelfMot = memberAvgAll(SELF,'mot');
+  const allTrMot   = memberAvgAll(TRAINER,'mot');
+  function deltaHtml(cur, prv){
+    if(cur==null||prv==null) return '<span class="delta flat">前週比 —</span>';
+    const d=cur-prv, cls=d>0.001?'up':(d<-0.001?'down':'flat'), a=d>0.001?'▲':(d<-0.001?'▼':'→');
+    return `<span class="delta ${cls}">前週比 ${a} ${Math.abs(d).toFixed(2)}</span>`;
+  }
+  const kpis = [
+    {label:"対象新人", val:`${MEMBERS.length}<small> 名</small>`, delta:`<span class="delta flat">自己申告＋トレーナー報告</span>`},
+    {label:`最新週 自己モチベ（${WEEKS[last]}週）`, val:`${selfMotW[last]??'—'}<small> /5</small>`, delta:deltaHtml(selfMotW[last], prev>=0?selfMotW[prev]:null)},
+    {label:`最新週 自己成長実感（${WEEKS[last]}週）`, val:`${selfGroW[last]??'—'}<small> /5</small>`, delta:deltaHtml(selfGroW[last], prev>=0?selfGroW[prev]:null)},
+    {label:"モチベ期間平均（自己／トレーナー）", val:`${allSelfMot}<small> / ${allTrMot}</small>`, delta:`<span class="delta flat">5段階</span>`},
+    {label:"注目ポイント", val:`${countConcerns()}<small> 件</small>`, delta:`<span class="delta flat">低スコア・体調/ネガ記述</span>`, alert:true},
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(k=>`
+    <div class="kpi ${k.alert?'alert':''}"><div class="label">${k.label}</div><div class="val">${k.val}</div>${k.delta||''}</div>`).join('');
+}
+
+/* ============================================================ トレンド ============================================================ */
+let chSelf, chTrainer, trendMode='全体';
+const lineOpts = {responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false}, tooltip:{mode:'index',intersect:false}},
+  scales:{y:{min:1,max:5,ticks:{stepSize:1,color:'#9aa3c4'},grid:{color:'#2a3052'}}, x:{ticks:{color:'#9aa3c4'},grid:{color:'#1c2138'}}}};
+function ds(data, keys){
+  const src = w => trendMode==='全体' ? weeklyOverall(data,w) : weeklyByMember(data,trendMode,w);
+  return keys.map(k=>({label:k.label, data:src(k.key), borderColor:k.c, backgroundColor:k.c+'22', tension:.3, spanGaps:true, pointRadius:3, borderWidth:2}));
+}
+function renderTrend(){
+  if(chSelf) chSelf.destroy(); if(chTrainer) chTrainer.destroy();
+  chSelf = new Chart(document.getElementById('ch-self'), {type:'line', data:{labels:WEEKS, datasets:ds(SELF,[{key:'mot',label:'モチベ',c:'#6c8cff'},{key:'und',label:'業務理解',c:'#ffb454'},{key:'gro',label:'成長実感',c:'#3ddc97'}])}, options:lineOpts});
+  chTrainer = new Chart(document.getElementById('ch-trainer'), {type:'line', data:{labels:WEEKS, datasets:ds(TRAINER,[{key:'mot',label:'モチベ',c:'#6c8cff'},{key:'att',label:'勤務姿勢',c:'#c98cff'},{key:'prg',label:'習熟度進捗',c:'#3ddc97'}])}, options:lineOpts});
+}
+function renderTrendChips(){
+  const opts=['全体',...MEMBERS];
+  document.getElementById('trend-chips').innerHTML = opts.map(o=>`<div class="chip ${o===trendMode?'on':''}" data-v="${o}">${o==='全体'?'全体平均':o}</div>`).join('');
+  document.querySelectorAll('#trend-chips .chip').forEach(c=>c.onclick=()=>{trendMode=c.dataset.v; renderTrendChips(); renderTrend();});
+}
+
+/* ============================================================ ギャップ ============================================================ */
+function renderGap(){
+  new Chart(document.getElementById('ch-gap'), {type:'bar',
+    data:{labels:MEMBERS.map(m=>m), datasets:[
+      {label:'モチベ 自己', data:MEMBERS.map(m=>memberAvg(SELF,m,'mot')), backgroundColor:'#6c8cff'},
+      {label:'モチベ トレーナー', data:MEMBERS.map(m=>memberAvg(TRAINER,m,'mot')), backgroundColor:'#6c8cff66'},
+      {label:'業務理解 自己', data:MEMBERS.map(m=>memberAvg(SELF,m,'und')), backgroundColor:'#ffb454'},
+      {label:'習熟度進捗 トレーナー', data:MEMBERS.map(m=>memberAvg(TRAINER,m,'prg')), backgroundColor:'#3ddc9788'},
+    ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#e8ebf5'}}, tooltip:{mode:'index',intersect:false}},
+      scales:{y:{min:0,max:5,ticks:{color:'#9aa3c4'},grid:{color:'#2a3052'}}, x:{ticks:{color:'#e8ebf5'},grid:{display:false}}}}});
+}
+
+/* ============================================================ カード ============================================================ */
+function renderCards(){
+  const html = MEMBERS.map((m,idx)=>{
+    const mot=latestVal(SELF,m,'mot'), und=latestVal(SELF,m,'und'), gro=latestVal(SELF,m,'gro');
+    const tPrg=latestVal(TRAINER,m,'prg'), tAtt=latestVal(TRAINER,m,'att'), tMot=latestVal(TRAINER,m,'mot');
+    const sMotAvg=memberAvg(SELF,m,'mot'), tMotAvg=memberAvg(TRAINER,m,'mot');
+    let gapText='トレーナー評価データなし';
+    if(sMotAvg!=null && tMotAvg!=null){
+      const g=tMotAvg-sMotAvg;
+      gapText = Math.abs(g)<0.2 ? 'モチベは自己／トレーナーでほぼ一致' : g>0 ? `トレーナーの方が高評価（+${g.toFixed(1)}）` : `本人の方が高評価（${g.toFixed(1)}）`;
+    }
+    let latestNote='';
+    for(let i=WEEKS.length-1;i>=0;i--){ const r=SELF.filter(d=>d.m===m && d._w===WEEKS[i] && d.note).pop(); if(r){ latestNote=`<b>${r._w}週（本人）</b>：${r.note}`; break; } }
+    const trTxt = tMot.v!=null ? `<b>トレーナー最新</b>：モチベ${tMot.v}・勤務姿勢${tAtt.v??'-'}・習熟${tPrg.v??'-'}（${tMot.w}週）` : 'トレーナー報告なし';
+    return `<div class="card">
+      <div class="name">${m}<span>${FULLNAME[m]}</span></div>
+      <div class="scorerow">
+        <div class="score"><div class="t">モチベ</div><div class="n">${mot.v??'—'}<small>/5</small></div></div>
+        <div class="score"><div class="t">業務理解</div><div class="n">${und.v??'—'}<small>/5</small></div></div>
+        <div class="score"><div class="t">成長実感</div><div class="n">${gro.v??'—'}<small>/5</small></div></div>
+      </div>
+      <div class="spark"><canvas id="spark-${idx}"></canvas></div>
+      <div class="trline">${trTxt}</div>
+      <div class="gapnote">📊 ${gapText}</div>
+      <div class="latest">${latestNote||'<span style="color:var(--muted)">直近コメントなし</span>'}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('cards').innerHTML = html;
+  MEMBERS.forEach((m,idx)=>{
+    new Chart(document.getElementById(`spark-${idx}`),{type:'line',
+      data:{labels:WEEKS, datasets:[
+        {data:weeklyByMember(SELF,m,'mot'), borderColor:'#6c8cff', tension:.35, spanGaps:true, pointRadius:1.5, borderWidth:2},
+        {data:weeklyByMember(SELF,m,'und'), borderColor:'#ffb454', tension:.35, spanGaps:true, pointRadius:1.5, borderWidth:2},
+        {data:weeklyByMember(SELF,m,'gro'), borderColor:'#3ddc97', tension:.35, spanGaps:true, pointRadius:1.5, borderWidth:2},
+      ]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{mode:'index',intersect:false}},
+        scales:{y:{min:1,max:5,display:false}, x:{ticks:{color:'#6b739a',font:{size:8}},grid:{display:false}}}}});
+  });
+}
+
+/* ============================================================ 注目ポイント ============================================================ */
+function renderAlerts(){
+  const items=[]; const recent = WEEKS.slice(-3);
+  MEMBERS.forEach(m=>{
+    const lat=latestVal(SELF,m,'mot'); const prv=lat.w?prevVal(SELF,m,'mot',lat.w):null;
+    if(lat.v!=null && prv!=null && (lat.v-prv)<=-1) items.push({who:m, msg:`自己モチベーションが ${prv} → ${lat.v} に低下（${lat.w}週）。`});
+  });
+  [...SELF.map(d=>({...d,src:'自己'})), ...TRAINER.map(d=>({...d,src:'トレーナー'}))]
+    .filter(d=>recent.includes(d._w) && lowScore(d))
+    .forEach(d=>{
+      const ks = d.src==='自己'?[['mot','モチベ'],['und','業務理解'],['gro','成長実感']]:[['mot','モチベ'],['att','勤務姿勢'],['prg','習熟度進捗']];
+      const low = ks.filter(([k])=>d[k]<=2).map(([k,l])=>`${l}${d[k]}`).join('・');
+      items.push({who:`${d.m||'（対象未記入）'}（${d.src}・${d._w}週）`, msg:`${low} と低評価。要フォロー。`});
+    });
+  [...SELF.map(d=>({...d,src:'本人'})), ...TRAINER.map(d=>({...d,src:'トレーナー'}))]
+    .filter(d=>recent.includes(d._w) && isConcernText(d.note))
+    .forEach(d=>items.push({who:`${d.m||'（対象未記入）'}（${d.src}記述・${d._w}週）`, msg:d.note}));
+  if(!items.length) items.push({ok:true, who:'特筆事項なし', msg:'直近で大きな低下や懸念の記述は検知されていません。'});
+  document.getElementById('alerts').innerHTML = items.map(it=>`
+    <div class="alert-item ${it.ok?'ok':''}"><div class="ico">${it.ok?'✅':'⚠️'}</div><div><div class="who">${it.who}</div><div class="msg">${it.msg}</div></div></div>`).join('');
+}
+
+/* ============================================================ タイムライン ============================================================ */
+let tlFilter='全体';
+function renderTlChips(){
+  const opts=['全体',...MEMBERS];
+  document.getElementById('tl-chips').innerHTML = opts.map(o=>`<div class="chip ${o===tlFilter?'on':''}" data-v="${o}">${o==='全体'?'全員':o}</div>`).join('');
+  document.querySelectorAll('#tl-chips .chip').forEach(c=>c.onclick=()=>{tlFilter=c.dataset.v; renderTlChips(); renderTimeline();});
+}
+function tlItem(d, who, kind){
+  const concern=isConcernRow(d);
+  const sc = kind==='self' ? `モチベ${d.mot}・理解${d.und}・成長${d.gro}` : `モチベ${d.mot}・姿勢${d.att}・習熟${d.prg}`;
+  return `<div class="tl-item ${concern?'concern':''}"><div class="tl-top"><span class="who">${who}</span><span class="sc">${d._w}週　${sc}</span></div><div class="body">${concern?'<span class="flagtag">要フォロー</span>':''}${d.note}</div></div>`;
+}
+function renderTimeline(){
+  const ord=d=>d._ts;
+  let self=SELF.filter(d=>d.note).slice().sort((a,b)=>ord(b)-ord(a));
+  let tr=TRAINER.filter(d=>d.note).slice().sort((a,b)=>ord(b)-ord(a));
+  if(tlFilter!=='全体'){ self=self.filter(d=>d.m===tlFilter); tr=tr.filter(d=>d.m===tlFilter); }
+  document.getElementById('tl-self').innerHTML = self.length? self.map(d=>tlItem(d, d.m||'—','self')).join('') : '<div style="color:var(--muted);font-size:12px">該当なし</div>';
+  document.getElementById('tl-trainer').innerHTML = tr.length? tr.map(d=>tlItem(d, d.m?`→ ${d.m}`:'→（対象未記入）','tr')).join('') : '<div style="color:var(--muted);font-size:12px">該当なし</div>';
+}
+
+/* ============================================================ boot ============================================================ */
+function boot(){
+  computeWeeks();
+  renderKPIs();
+  renderTrendChips(); renderTrend();
+  renderCards();
+  renderGap();
+  renderAlerts();
+  renderTlChips(); renderTimeline();
+}
+
+/* ============================================================ unlock flow ============================================================ */
+const gate=document.getElementById('gate'), app=document.getElementById('app'),
+      pwInput=document.getElementById('gate-pw'), btn=document.getElementById('gate-btn'), errEl=document.getElementById('gate-err');
+let booted=false;
+async function tryUnlock(pw, fromStore){
+  if(!pw) return;
+  btn.disabled=true; errEl.textContent='復号中…';
+  try{
+    const data = await decryptData(pw);
+    MEMBERS=data.MEMBERS; FULLNAME=data.FULLNAME; MCOLOR=data.MCOLOR; SELF=data.SELF; TRAINER=data.TRAINER; META_UPDATED=data.META_UPDATED;
+    sessionStorage.setItem('ojt_pw', pw);
+    gate.style.display='none'; app.style.display='block';
+    if(!booted){ boot(); booted=true; }
+  }catch(e){
+    errEl.textContent = fromStore ? '' : 'パスワードが違います';
+    if(fromStore) sessionStorage.removeItem('ojt_pw');
+    btn.disabled=false;
+    if(!fromStore){ pwInput.value=''; pwInput.focus(); }
+  }
+}
+btn.onclick=()=>tryUnlock(pwInput.value,false);
+pwInput.addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(pwInput.value,false); });
+window.addEventListener('DOMContentLoaded', ()=>{
+  pwInput.focus();
+  const saved=sessionStorage.getItem('ojt_pw');
+  if(saved) tryUnlock(saved, true);
+});
+</script>
+</body>
+</html>
