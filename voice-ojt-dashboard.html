@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新入社員モニタリング ダッシュボード｜株式会社ボイス</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1417; --panel:#151d22; --panel2:#1b262d; --line:#28353e;
+    --txt:#e9eef2; --sub:#9db0bb; --muted:#6c7f8a;
+    --accent:#35c4a5; --good:#3ddc97; --warn:#ffb454; --bad:#ff6b81;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--txt);
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1280px; margin:0 auto; padding:28px 20px 80px}
+  header.top{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:24px}
+  h1{font-size:23px; margin:0 0 4px; letter-spacing:.02em}
+  .sub{color:var(--sub); font-size:13px}
+  .meta{color:var(--muted); font-size:12px; text-align:right}
+  .badge{display:inline-block; background:var(--panel2); border:1px solid var(--line); color:var(--sub); border-radius:999px; padding:3px 10px; font-size:11px; margin-left:6px}
+
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:26px}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px 18px}
+  .kpi .label{color:var(--sub); font-size:12px; margin-bottom:6px}
+  .kpi .val{font-size:30px; font-weight:700; line-height:1.1}
+  .kpi .val small{font-size:14px; color:var(--muted); font-weight:500}
+  .kpi .delta{font-size:12px; margin-top:4px}
+  .up{color:var(--good)} .down{color:var(--bad)} .flat{color:var(--muted)}
+  .kpi.alert .val{color:var(--warn)}
+
+  section{margin-bottom:30px}
+  .sec-h{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px}
+  .sec-h h2{font-size:17px; margin:0; font-weight:700}
+  .sec-h .hint{color:var(--muted); font-size:12px}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .chart-box{position:relative; height:300px}
+
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:15px; display:flex; flex-direction:column; gap:10px}
+  .card.flagged{border-color:#4a3a1c}
+  .card .name{font-size:15px; font-weight:700; display:flex; justify-content:space-between; align-items:center}
+  .card .name .miss{font-size:10px; color:var(--warn); font-weight:600}
+  .scorerow{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+  .score{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 4px; text-align:center}
+  .score.low{border-color:var(--warn)}
+  .score .t{font-size:10px; color:var(--sub)}
+  .score .n{font-size:18px; font-weight:700}
+  .score .n small{font-size:10px; color:var(--muted); font-weight:500}
+  .spark{height:90px; position:relative}
+  .latest{font-size:11.5px; color:var(--sub); border-top:1px dashed var(--line); padding-top:7px}
+  .latest b{color:var(--txt); font-weight:600}
+
+  .alerts{display:flex; flex-direction:column; gap:10px}
+  .alert-item{display:flex; gap:12px; align-items:flex-start; background:#241f1a; border:1px solid #4a3a1c; border-radius:12px; padding:12px 14px}
+  .alert-item.critical{background:#2b1a1e; border-color:#5a2733}
+  .alert-item .ico{font-size:18px}
+  .alert-item .who{font-weight:700}
+  .alert-item .msg{font-size:13px; color:var(--sub)}
+  .alert-item.ok{background:#15291f; border-color:#1f4733}
+  .alert-item.ok .ico{color:var(--good)}
+
+  .timeline{display:grid; grid-template-columns:1fr; gap:16px}
+  .tl-col h3{font-size:13px; color:var(--sub); margin:0 0 10px; font-weight:700}
+  .tl-list{display:flex; flex-direction:column; gap:10px; max-height:560px; overflow:auto; padding-right:6px}
+  .tl-item{background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--line); border-radius:10px; padding:10px 12px}
+  .tl-item.concern{border-left-color:var(--warn); background:#241f1a}
+  .tl-item.consult{border-left-color:var(--bad); background:#2b1a1e}
+  .tl-item .tl-top{display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px}
+  .tl-item .who{color:var(--txt); font-weight:600}
+  .tl-item .sc{font-variant-numeric:tabular-nums}
+  .tl-item .body{font-size:13px; color:var(--txt); white-space:pre-wrap; word-break:break-word}
+  .flagtag{display:inline-block; background:#3a2c12; color:var(--warn); border-radius:6px; padding:1px 7px; font-size:10px; margin-right:6px}
+  .flagtag.red{background:#3a1220; color:var(--bad)}
+
+  .subtable{width:100%; border-collapse:collapse; font-size:12px}
+  .subtable th,.subtable td{border-bottom:1px solid var(--line); padding:7px 8px; text-align:center}
+  .subtable th{color:var(--sub); font-weight:600}
+  .subtable td:first-child,.subtable th:first-child{text-align:left}
+  .dot-ok{color:var(--good)} .dot-ng{color:var(--muted)}
+
+  .legend{display:flex; gap:14px; font-size:12px; color:var(--sub); margin-bottom:8px; flex-wrap:wrap}
+  .legend .k{display:inline-flex; align-items:center; gap:6px}
+  .dot{width:10px; height:10px; border-radius:3px; display:inline-block}
+
+  footer{color:var(--muted); font-size:12px; text-align:center; margin-top:40px; border-top:1px solid var(--line); padding-top:20px}
+  .scale-note{color:var(--muted); font-size:11px}
+
+  @media(max-width:1080px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .grid2{grid-template-columns:1fr}
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .timeline{grid-template-columns:1fr}
+  }
+
+  #gate{position:fixed; inset:0; background:#0b1114; display:flex; align-items:center; justify-content:center; z-index:9999}
+  .gate-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px 30px; width:340px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .gate-card h2{margin:0 0 6px; font-size:18px}
+  .gate-card p{color:var(--sub); font-size:13px; margin:0 0 18px}
+  .gate-card input{width:100%; padding:11px 14px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; color:var(--txt); font-size:15px; margin-bottom:12px}
+  .gate-card input:focus{outline:none; border-color:var(--accent)}
+  .gate-card button{width:100%; padding:11px; background:var(--accent); color:#0b1114; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer}
+  .gate-card button:disabled{opacity:.5; cursor:wait}
+  #gate-err{color:var(--bad); font-size:12px; margin-top:10px; min-height:16px}
+  .gate-note{color:var(--muted); font-size:11px; margin-top:16px}
+</style>
+</head>
+<body>
+<div id="gate">
+  <div class="gate-card">
+    <h2>🔒 新入社員モニタリング</h2>
+    <p>閲覧にはパスワードが必要です<br>株式会社ボイス</p>
+    <input id="gate-pw" type="password" placeholder="パスワード" autocomplete="current-password">
+    <button id="gate-btn">表示する</button>
+    <div id="gate-err"></div>
+    <div class="gate-note">経営陣・育成担当 閲覧用。データはパスワードで暗号化されています。</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <h1>新入社員モニタリング ダッシュボード</h1>
+    <div class="sub">株式会社ボイス｜週次セルフレポート（モチベーション・成長実感・コンディション）<span class="badge">本人申告</span></div>
+  </div>
+  <div class="meta">最終更新: <span id="meta-updated"></span><br><span class="scale-note">スコアは1〜5（5が最良）／週は提出日の属する週（月曜起点）</span></div>
+</header>
+
+<section>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section>
+  <div class="sec-h"><h2>⚠️ フォローが必要なメンバー</h2><div class="hint">相談あり・低スコア・急落・未提出を自動検知</div></div>
+  <div class="alerts" id="alerts"></div>
+</section>
+
+<section>
+  <div class="sec-h"><h2>全体推移</h2><div class="hint">週ごとの全員平均</div></div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="legend" id="legend-metrics"></div>
+      <div class="chart-box"><canvas id="chart-overall"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="legend" id="legend-members"></div>
+      <div class="chart-box"><canvas id="chart-members"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-h"><h2>メンバー別サマリー</h2><div class="hint">最新週スコア／モチベーション推移／直近コメント</div></div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section>
+  <div class="sec-h"><h2>提出状況</h2><div class="hint">●=提出済み</div></div>
+  <div class="panel" style="overflow-x:auto"><table class="subtable" id="subtable"></table></div>
+</section>
+
+<section>
+  <div class="sec-h"><h2>1週間の振り返り</h2><div class="hint">新しい順／⚠=不安ワード・低スコア、🔴=相談あり</div></div>
+  <div class="timeline">
+    <div class="tl-col"><div class="tl-list" id="tl-notes" style="max-height:none"></div></div>
+  </div>
+</section>
+
+<footer>株式会社ボイス 新入社員モニタリング｜経営陣・育成担当 閲覧用</footer>
+</div>
+
+<script>
+let MEMBERS, ROWS, META_UPDATED;
+const ENC = {"salt":"b7EA5yJ2QdR9AFLZ93hq8g==","iv":"xfiim5bLfLraFok1","iter":200000,"ct":"MA8d74E6z7NV3k1hHHTeIxtpuJNa8ekaSvw0G1VpolYirVMgHDYRdkltP1C/M61qH+qJ87JiSU+rE/4Z5pJQM5c7TG4MPdTlUdUl92M3QFGz1Z7PTPkfxL2RQf4fWAYxRTjF5RQL+Np3/5r4zchhDlG6MLMGpmLQAz7Gct4SZxNjNxiw+bGq2n8IHNcFjxpxQtLP9nqzg6pNN0I9Vwu/HAWuVlTAeaU1ZQsoW7XnP6qmkT9OUdJbKnpH8MqOXB/RC0vEKLMlgyEHKcx7yucciAFLAeTxkYlO6xxXRMtmZLm/5JfcbcwKeujbqbt7orFlddy6XIgbnSezIsCS3VX/CyZb7ckbpIY59NFEUTBmZf1E0wYS0OiG0jbBALKDojFQEdFe9liBcnX9Uhe5pXzAyTuj2NDFgj8T5imA9LK7nQmiRZruKiU+YEnPRlvSYfj1y1iaaf6pgsKu1t7J4fz17Ke+yJh7QlqUeFt2Cjr/Efh5IC6x88WiHk2f/qxShPWNWukE4batuM1WUmTUjOC3CzCJ1SruGWuuPUvCVYf+KLuoxZwKOsTIqoEHZKem3DzP22/2icP+pR/tw3ncn4I8zsh0DKesTKx09IzMFArZhqqCD+Vz63Fh5SgwJJhf9n82AcRCMkHDmEULZ+gvIHsRMuh0Spe3GvG3U6Sl+OGJL4b00SXzoyqcp9vPY4onc3p9vBfAqckyQOd+zLbaGqzvYfpDhEV1JkA/qXeRf14yfD377tbqX9iB+NvZ778chUfPLc/W8W/IXzS0aIAKN70M9GQ+pDm/2xD4id65U2d1lJ9BfPqVV5Gep5hL3QIGuhQ4c4M="};
+
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+async function decryptData(pw){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:b64ToBytes(ENC.salt), iterations:ENC.iter, hash:'SHA-256'},
+    baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(ENC.iv)}, key, b64ToBytes(ENC.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+function __renderAll(){
+
+
+const METRICS = [
+  {key:'mot',  label:'モチベーション', short:'モチベ', color:'#35c4a5'},
+  {key:'gro',  label:'成長実感',       short:'成長',   color:'#c792ea'},
+  {key:'cond', label:'コンディション', short:'体調',   color:'#ffb454'},
+];
+const MCOLOR = ['#35c4a5','#6c8cff','#c792ea','#ffb454','#ff6b81','#3ddc97','#f78c6c','#82aaff'];
+
+document.getElementById('meta-updated').textContent = META_UPDATED;
+
+/* ---- 週バケット（提出日→その週の月曜） ---- */
+function weekInfo(dStr){
+  const [y,mo,da] = dStr.split('/').map(Number);
+  const dt = new Date(y, mo-1, da);
+  const off = (dt.getDay()+6)%7;
+  dt.setDate(dt.getDate()-off);
+  return {label:`${dt.getMonth()+1}/${dt.getDate()}週`, ts:dt.getTime()};
+}
+ROWS.forEach(r=>{ const w=weekInfo(r.d); r._w=w.label; r._ts=w.ts; });
+const WEEKS = (()=>{ const m=new Map(); ROWS.forEach(r=>m.set(r._w,r._ts)); return [...m.entries()].sort((a,b)=>a[1]-b[1]).map(e=>e[0]); })();
+
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+const rnd = v => v==null?null:+v.toFixed(2);
+const seriesFor = (member,key) => WEEKS.map(w=>{ const v=ROWS.filter(r=>r.m===member&&r._w===w).map(r=>r[key]); return v.length?rnd(avg(v)):null; });
+const weeklyOverall = key => WEEKS.map(w=>{ const v=ROWS.filter(r=>r._w===w).map(r=>r[key]); return v.length?rnd(avg(v)):null; });
+const lastTwo = arr => { const idx=[]; for(let i=arr.length-1;i>=0;i--){ if(arr[i]!=null){ idx.push(i); if(idx.length===2) break; } } return idx; };
+
+/* ---- 不安ワード検知 ---- */
+const FLAG_WORDS = ["体調不良","不安","心配","疲れ","しんどい","つらい","辛い","遅れ","間に合わ","ミス","落ち込","眠れ","キツ","きつい","孤独","辞め","自信がな"];
+const isConcernText = t => t && FLAG_WORDS.some(w=>t.includes(w));
+const lowScore = r => ['mot','gro','cond'].some(k=>r[k]!=null && r[k]<=2);
+const NO_CONSULT = /^(特に|今は)?(なし|無し|ない(です)?|無い(です)?|ありません|ありませんです|大丈夫(です)?|問題(ない(です)?|ありません)|OK|ok)[。．.!！\s]*$/;
+const hasConsult = r => { const t=(r.consult||'').trim(); return !!t && !NO_CONSULT.test(t); };
+
+/* ---- KPI ---- */
+(function(){
+  const box = document.getElementById('kpis');
+  const lastW = WEEKS[WEEKS.length-1];
+  const submitted = new Set(ROWS.filter(r=>r._w===lastW).map(r=>r.m));
+  const html = [];
+  METRICS.forEach(mt=>{
+    const s = weeklyOverall(mt.key);
+    const [li,pi] = lastTwo(s);
+    const cur = li!=null?s[li]:null, prv = pi!=null?s[pi]:null;
+    let delta = '<span class="flat">—</span>';
+    if(cur!=null && prv!=null){
+      const d = +(cur-prv).toFixed(2);
+      const cls = d>0.001?'up':(d<-0.001?'down':'flat');
+      const a = d>0.001?'▲':(d<-0.001?'▼':'→');
+      delta = `<span class="${cls}">${a} ${Math.abs(d).toFixed(2)} <small style="color:var(--muted)">前週比</small></span>`;
+    }
+    html.push(`<div class="kpi${cur!=null&&cur<3?' alert':''}">
+      <div class="label">${mt.label}（今週平均）</div>
+      <div class="val">${cur!=null?cur.toFixed(2):'–'}<small> /5</small></div>
+      <div class="delta">${delta}</div></div>`);
+  });
+  html.push(`<div class="kpi${submitted.size<MEMBERS.length?' alert':''}">
+    <div class="label">今週の提出（${lastW}）</div>
+    <div class="val">${submitted.size}<small> /${MEMBERS.length}名</small></div>
+    <div class="delta"><span class="${submitted.size===MEMBERS.length?'up':'down'}">${submitted.size===MEMBERS.length?'全員提出済み':'未提出: '+MEMBERS.filter(m=>!submitted.has(m)).join('、')}</span></div></div>`);
+  box.innerHTML = html.join('');
+})();
+
+/* ---- アラート ---- */
+(function(){
+  const box = document.getElementById('alerts');
+  const items = [];
+  const lastW = WEEKS[WEEKS.length-1];
+  MEMBERS.forEach(m=>{
+    const rows = ROWS.filter(r=>r.m===m).sort((a,b)=>a._ts-b._ts);
+    const latest = rows[rows.length-1];
+    // 相談あり（最新提出分）
+    if(latest && hasConsult(latest)){
+      items.push({cls:'critical', ico:'🔴', who:m, msg:`相談したいことの記入あり（${latest._w}）: 「${latest.consult}」`});
+    }
+    // 低スコア
+    if(latest && lowScore(latest)){
+      const low = METRICS.filter(mt=>latest[mt.key]!=null && latest[mt.key]<=2).map(mt=>`${mt.label} ${latest[mt.key]}`).join(' / ');
+      items.push({cls:'', ico:'🟠', who:m, msg:`スコア2以下: ${low}（${latest._w}）`});
+    }
+    // モチベ急落（-1.5以上、または-1.0以上かつ最新が3以下）
+    const s = seriesFor(m,'mot');
+    const [li,pi] = lastTwo(s);
+    if(li!=null && pi!=null){
+      const drop = s[pi]-s[li];
+      if(drop>=1.5 || (drop>=1.0 && s[li]<=3)){
+        items.push({cls:'', ico:'🟠', who:m, msg:`モチベーションが前回比 -${drop.toFixed(1)}（${s[pi]} → ${s[li]}）`});
+      }
+    }
+    // 連続未提出
+    let missStreak = 0;
+    for(let i=WEEKS.length-1;i>=0;i--){ if(rows.some(r=>r._w===WEEKS[i])) break; missStreak++; }
+    if(missStreak>=2) items.push({cls:'', ico:'🟠', who:m, msg:`${missStreak}週連続で未提出（最終提出: ${latest?latest._w:'なし'}）`});
+    else if(missStreak===1) items.push({cls:'', ico:'⚪', pr:2, who:m, msg:`今週（${lastW}）未提出。金曜案内直後なら様子見でOK`});
+  });
+  if(!items.length){
+    box.innerHTML = `<div class="alert-item ok"><div class="ico">✅</div><div><span class="who">全員問題なし</span><div class="msg">低スコア・急落・未提出・相談事項はありません</div></div></div>`;
+  } else {
+    const prio = i => i.pr ?? (i.cls==='critical'?0:1);
+    items.sort((a,b)=>prio(a)-prio(b));
+    box.innerHTML = items.map(i=>`<div class="alert-item ${i.cls}"><div class="ico">${i.ico}</div><div><span class="who">${i.who}</span><div class="msg">${i.msg}</div></div></div>`).join('');
+  }
+})();
+
+/* ---- チャート共通 ---- */
+Chart.defaults.color = '#9db0bb';
+Chart.defaults.borderColor = '#28353e';
+const lineOpts = {responsive:true, maintainAspectRatio:false,
+  scales:{y:{min:1,max:5,ticks:{stepSize:1}}},
+  plugins:{legend:{display:false}}, spanGaps:true,
+  elements:{line:{tension:.3}, point:{radius:3}}};
+
+/* 全体推移（指標別） */
+(function(){
+  const lg = document.getElementById('legend-metrics');
+  lg.innerHTML = METRICS.map(mt=>`<span class="k"><span class="dot" style="background:${mt.color}"></span>${mt.label}</span>`).join('');
+  new Chart(document.getElementById('chart-overall'),{type:'line',
+    data:{labels:WEEKS, datasets:METRICS.map(mt=>({label:mt.label, data:weeklyOverall(mt.key), borderColor:mt.color, backgroundColor:mt.color}))},
+    options:lineOpts});
+})();
+
+/* メンバー別モチベ推移 */
+(function(){
+  const lg = document.getElementById('legend-members');
+  lg.innerHTML = MEMBERS.map((m,i)=>`<span class="k"><span class="dot" style="background:${MCOLOR[i%MCOLOR.length]}"></span>${m}</span>`).join('') + '<span class="k" style="color:var(--muted)">（モチベーション）</span>';
+  new Chart(document.getElementById('chart-members'),{type:'line',
+    data:{labels:WEEKS, datasets:MEMBERS.map((m,i)=>({label:m, data:seriesFor(m,'mot'), borderColor:MCOLOR[i%MCOLOR.length], backgroundColor:MCOLOR[i%MCOLOR.length]}))},
+    options:lineOpts});
+})();
+
+/* ---- メンバーカード ---- */
+(function(){
+  const box = document.getElementById('cards');
+  const lastW = WEEKS[WEEKS.length-1];
+  box.innerHTML = MEMBERS.map((m,i)=>{
+    const rows = ROWS.filter(r=>r.m===m).sort((a,b)=>a._ts-b._ts);
+    const latest = rows[rows.length-1];
+    const missing = latest ? latest._w!==lastW : true;
+    const flagged = latest && (lowScore(latest) || isConcernText(latest.note) || hasConsult(latest));
+    const scores = METRICS.map(mt=>{
+      const v = latest?latest[mt.key]:null;
+      return `<div class="score${v!=null&&v<=2?' low':''}"><div class="t">${mt.short}</div><div class="n">${v??'–'}<small>/5</small></div></div>`;
+    }).join('');
+    const cmt = latest && latest.note ? `<div class="latest"><b>${latest._w}:</b> ${latest.note.slice(0,60)}${latest.note.length>60?'…':''}</div>` : '';
+    return `<div class="card${flagged?' flagged':''}">
+      <div class="name">${m}${missing?'<span class="miss">今週未提出</span>':''}</div>
+      <div class="scorerow">${scores}</div>
+      <div class="spark"><canvas id="spark-${i}"></canvas></div>
+      ${cmt}</div>`;
+  }).join('');
+  MEMBERS.forEach((m,i)=>{
+    new Chart(document.getElementById('spark-'+i),{type:'line',
+      data:{labels:WEEKS, datasets:[{data:seriesFor(m,'mot'), borderColor:MCOLOR[i%MCOLOR.length], backgroundColor:MCOLOR[i%MCOLOR.length]}]},
+      options:{...lineOpts, scales:{y:{min:1,max:5,display:false},x:{display:false}}, elements:{line:{tension:.3},point:{radius:2}}}});
+  });
+})();
+
+/* ---- 提出状況テーブル ---- */
+(function(){
+  const t = document.getElementById('subtable');
+  let html = '<tr><th>メンバー</th>' + WEEKS.map(w=>`<th>${w}</th>`).join('') + '</tr>';
+  MEMBERS.forEach(m=>{
+    html += `<tr><td>${m}</td>` + WEEKS.map(w=>{
+      const has = ROWS.some(r=>r.m===m&&r._w===w);
+      return `<td class="${has?'dot-ok':'dot-ng'}">${has?'●':'－'}</td>`;
+    }).join('') + '</tr>';
+  });
+  t.innerHTML = html;
+})();
+
+/* ---- 振り返りタイムライン ---- */
+(function(){
+  const sorted = [...ROWS].sort((a,b)=>b._ts-a._ts);
+  const box = document.getElementById('tl-notes');
+  const scoreStr = r => METRICS.map(mt=>`${mt.short}${r[mt.key]??'–'}`).join('・');
+  box.innerHTML = sorted.filter(r=>(r.note&&r.note.trim())||hasConsult(r)).map(r=>{
+    const consult = hasConsult(r) ? r.consult.trim() : '';
+    const concern = lowScore(r) || isConcernText(r.note);
+    const cls = consult?'consult':(concern?'concern':'');
+    const tags = (consult?'<span class="flagtag red">🔴 相談あり</span>':'') + (concern?'<span class="flagtag">⚠ 要チェック</span>':'');
+    const body = [r.note&&r.note.trim()?r.note:null, consult?`【相談】${r.consult}`:null].filter(Boolean).join('\n');
+    return `<div class="tl-item ${cls}"><div class="tl-top"><span><span class="who">${r.m}</span>｜${r._w}</span><span class="sc">${scoreStr(r)}</span></div><div class="body">${tags}${body}</div></div>`;
+  }).join('') || '<div class="tl-item"><div class="body">記入なし</div></div>';
+})();
+
+}
+
+(function(){
+  const btn = document.getElementById('gate-btn');
+  const pwInput = document.getElementById('gate-pw');
+  const err = document.getElementById('gate-err');
+  async function attempt(){
+    btn.disabled = true; err.textContent = '';
+    try {
+      const data = await decryptData(pwInput.value);
+      MEMBERS = data.members; ROWS = data.rows; META_UPDATED = data.updated;
+      document.getElementById('gate').remove();
+      __renderAll();
+    } catch(e) {
+      err.textContent = 'パスワードが違います';
+      btn.disabled = false; pwInput.select();
+    }
+  }
+  btn.addEventListener('click', attempt);
+  pwInput.addEventListener('keydown', e => { if(e.key==='Enter') attempt(); });
+  pwInput.focus();
+})();
+</script></script>
+</body>
+</html>
