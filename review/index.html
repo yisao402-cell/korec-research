@@ -103,8 +103,8 @@
   </div>
 
   <div class="step preview" id="step4">
-    <h2><span class="badge">4</span>内定者プロファイル <span id="offerCount" style="font-size:13px;color:var(--muted);font-weight:400;margin-left:4px"></span></h2>
-    <p class="sub">内定を出した候補者（承諾／辞退含む）の詳細を1人ずつ表示します</p>
+    <h2><span class="badge">4</span><span id="offerSectionTitle">内定者プロファイル</span> <span id="offerCount" style="font-size:13px;color:var(--muted);font-weight:400;margin-left:4px"></span></h2>
+    <p class="sub" id="offerSubtitle">内定を出した候補者（承諾／辞退含む）の詳細を1人ずつ表示します</p>
     <div id="offerList" style="margin-top:8px"></div>
   </div>
 
@@ -285,13 +285,42 @@ function renderAll(){
 
 function renderOffers(){
   const offers = listOffers(CURRENT.records);
-  document.getElementById('offerCount').textContent = `（${offers.length}名）`;
+  const titleEl = document.getElementById('offerSectionTitle');
+  const subEl = document.getElementById('offerSubtitle');
+  const countEl = document.getElementById('offerCount');
   const el = document.getElementById('offerList');
-  if (!offers.length){
-    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);background:#f8fafc;border-radius:8px">内定者はまだいません</div>`;
+
+  if (offers.length){
+    // 内定者がいる場合はそのまま表示
+    titleEl.textContent = '内定者プロファイル';
+    subEl.textContent = '内定を出した候補者（承諾／辞退含む）の詳細を1人ずつ表示します';
+    countEl.textContent = `（${offers.length}名）`;
+    el.innerHTML = offers.map(r => offerCardHTML(r)).join('');
     return;
   }
-  el.innerHTML = offers.map(r => offerCardHTML(r)).join('');
+
+  // フォールバック: 内定者ゼロなら、選考中の主要候補者を表示
+  const inProgress = CURRENT.records.filter(r =>
+    !['不採用','選考辞退','内定辞退','応募辞退'].includes(r.status)
+  );
+  if (inProgress.length){
+    titleEl.textContent = '選考中候補者プロファイル';
+    const statusBreakdown = Object.entries(countBy(CURRENT.records, r => r.status || '未設定'))
+      .sort((a,b)=>b[1]-a[1]).map(([k,v]) => `${k}:${v}`).join(' / ');
+    subEl.innerHTML = `内定者はまだいないため、進行中の候補者を表示しています<br>
+      <span style="font-size:11px">全体ステータス: ${esc(statusBreakdown)}</span>`;
+    countEl.textContent = `（${inProgress.length}名）`;
+    el.innerHTML = inProgress.slice(0, 20).map(r => offerCardHTML(r)).join('') +
+      (inProgress.length > 20 ? `<div style="text-align:center;color:var(--muted);font-size:12px;margin-top:8px">…他 ${inProgress.length - 20} 名（表示は上位20名まで）</div>` : '');
+    return;
+  }
+
+  titleEl.textContent = '内定者プロファイル';
+  subEl.textContent = '';
+  countEl.textContent = '';
+  el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);background:#f8fafc;border-radius:8px">
+    表示できる候補者がいません（全員が不採用/辞退ステータス）
+  </div>`;
 }
 
 function renderMeta(){
