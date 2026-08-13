@@ -291,11 +291,20 @@ function renderOffers(){
   const el = document.getElementById('offerList');
 
   if (offers.length){
-    // 内定者がいる場合はそのまま表示
+    // KOREC経由を先頭、次にKOREC以外、その他
+    const sorted = [...offers].sort((a,b) => {
+      const ka = hasKorecOffer(a) ? 0 : hasExternalOffer(a) ? 1 : 2;
+      const kb = hasKorecOffer(b) ? 0 : hasExternalOffer(b) ? 1 : 2;
+      return ka - kb;
+    });
+    const korec = offers.filter(hasKorecOffer).length;
+    const ext = offers.filter(hasExternalOffer).length;
     titleEl.textContent = '内定者プロファイル';
-    subEl.textContent = '内定を出した候補者（承諾／辞退含む）の詳細を1人ずつ表示します';
+    subEl.innerHTML = `内定を出した候補者の詳細を1人ずつ表示（
+      <span style="color:#10b981;font-weight:600">KOREC経由: ${korec}名</span> /
+      <span style="color:#94a3b8;font-weight:600">KOREC以外: ${ext}名</span>）`;
     countEl.textContent = `（${offers.length}名）`;
-    el.innerHTML = offers.map(r => offerCardHTML(r)).join('');
+    el.innerHTML = sorted.map(r => offerCardHTML(r)).join('');
     return;
   }
 
@@ -338,29 +347,43 @@ function renderMeta(){
 function renderTopStats(){
   const recs = CURRENT.records;
   const total = recs.length;
-  const offers = countOffers(recs);
-  const accepted = countAccepted(recs);
+  const korecOffers = countKorecOffers(recs);
+  const externalOffers = countExternalOffers(recs);
+  const totalAccepted = korecOffers + externalOffers;
 
   const stats = [
-    {num: total, lbl:'応募総数'},
-    {num: offers, lbl:'内定者数'},
-    {num: accepted, lbl:'内定承諾者数'},
+    {num: total, lbl:'応募総数', color: null},
+    {num: totalAccepted, lbl:'内定承諾者（合計）', color: null},
+    {num: korecOffers, lbl:'内定承諾（KOREC経由）', color:'#10b981'},
+    {num: externalOffers, lbl:'内定承諾（KOREC以外）', color:'#94a3b8'},
   ];
   document.getElementById('topStats').innerHTML = stats.map(s =>
-    `<div class="stat"><div class="num">${s.num}</div><div class="lbl">${s.lbl}</div></div>`
+    `<div class="stat"><div class="num" ${s.color?`style="color:${s.color}"`:''}>${s.num}</div><div class="lbl">${s.lbl}</div></div>`
   ).join('');
 }
 
-// 内定者 = 内定を出した人全員（承諾/辞退/内定/最終合格）
-function countOffers(recs){
-  return recs.filter(r => ['内定承諾','内定辞退','内定','最終合格'].includes(r.status)).length;
+// 内定・承諾の判定
+// KORECの実データでは、ステータスではなく「タグ」列に "内定承諾済み（KOREC経由）" 等が入るケースが多い
+function hasKorecOffer(r){ return String(r.tag||'').includes('内定承諾済み（KOREC経由）'); }
+function hasExternalOffer(r){ return String(r.tag||'').includes('内定承諾済み（KOREC以外）'); }
+function hasAnyOfferTag(r){
+  const t = String(r.tag||'');
+  return t.includes('内定承諾済み') || t.includes('内定承諾') || t.includes('最終合格');
 }
-function countAccepted(recs){
-  return recs.filter(r => r.status === '内定承諾').length;
+function isOfferStatus(r){
+  return ['内定承諾','内定辞退','内定','最終合格'].includes(r.status);
 }
+// 内定者 = ステータスまたはタグで内定関連の全員
 function listOffers(recs){
-  return recs.filter(r => ['内定承諾','内定辞退','内定','最終合格'].includes(r.status));
+  return recs.filter(r => isOfferStatus(r) || hasAnyOfferTag(r));
 }
+function countOffers(recs){ return listOffers(recs).length; }
+// 内定承諾者 = ステータス「内定承諾」またはタグに「内定承諾済み」
+function countAccepted(recs){
+  return recs.filter(r => r.status === '内定承諾' || hasAnyOfferTag(r)).length;
+}
+function countKorecOffers(recs){ return recs.filter(hasKorecOffer).length; }
+function countExternalOffers(recs){ return recs.filter(hasExternalOffer).length; }
 
 function renderAnonTable(){
   const recs = CURRENT.records;
@@ -510,7 +533,8 @@ function renderPrompt(){
     const edu = (r._eduList||[]).map((e,i) => `  - ${i===0?'最終学歴':'学歴'+(i+1)}: ${e.univ}${e.country?` (${e.country})`:''} / ${e.major}${e.majorSub?' '+e.majorSub:''} / ${e.degree||'-'} / ${e.sciHum||'-'}${e.gradDate?` / ${formatDate(e.gradDate)}卒`:''}`).join('\n');
     const work = (r._workList||[]).map((w,i) => `  - 職歴${i+1}: ${w.company} / ${w.industry||'-'} / ${w.jobType||'-'} ${w.position1?'/ '+w.position1:''} (${formatDate(w.from)} 〜 ${formatDate(w.to)})${w.duty?'\n     職務: '+String(w.duty).slice(0,200):''}`).join('\n');
     const langs = [r.jlpt&&`JLPT:${normalizeJLPT(r.jlpt)}`, r.toeic&&`TOEIC:${r.toeic}`, r.toefl&&`TOEFL:${r.toefl}`, r.ielts&&`IELTS:${r.ielts}`, r.hsk&&`HSK:${r.hsk}`, r.jpNative&&'日本語ネイティブ', r.cnNative&&'中国語ネイティブ'].filter(Boolean).join(' / ') || '記入なし';
-    return `### ${r._anonId} ｜ ${r.status} ｜ ${r.gender||'-'} / ${r.age||'-'}歳 / ${r.region||r.country||'-'}
+    const attribLabel = hasKorecOffer(r) ? '【内定承諾: KOREC経由】' : hasExternalOffer(r) ? '【内定承諾: KOREC以外】' : r.status||'';
+    return `### ${r._anonId} ｜ ${attribLabel} ｜ ${r.gender||'-'} / ${r.age||'-'}歳 / ${r.region||r.country||'-'}
 - 学歴:
 ${edu || '  - 記入なし'}
 - 語学: ${langs}
@@ -590,7 +614,10 @@ Geminiの **Canvas → スライド作成（プレゼンテーション）機能
 - **企業名**: ${company}
 - **求人名**: ${job}
 - **応募総数**: ${total}名
+- **内定承諾者数**: ${countAccepted(recs)}名（うち **KOREC経由: ${countKorecOffers(recs)}名** / KOREC以外: ${countExternalOffers(recs)}名）
 - **データ抽出日**: ${new Date().toISOString().slice(0,10)}
+
+**重要**: 「内定承諾者数」の内訳（KOREC経由 vs KOREC以外）は、KORECの成果を示す最重要指標として資料内で強調してください。特に **KOREC経由の内定承諾数** はKORECのValue Propositionを示す数字なので、表紙・サマリーで大きく扱ってください。
 
 ## 集計データ
 
@@ -722,7 +749,9 @@ function buildPdfHTML(){
 
   // 内定者抽出（承諾/辞退/内定/最終合格を含む）
   const winners = listOffers(recs);
-  const winnersAccepted = winners.filter(r => r.status === '内定承諾');
+  const winnersAccepted = winners.filter(r => r.status === '内定承諾' || hasAnyOfferTag(r));
+  const winnersKorec = winners.filter(hasKorecOffer);
+  const winnersExternal = winners.filter(hasExternalOffer);
 
   const distBlock = (title, data) => {
     const entries = Object.entries(data).sort((a,b)=>b[1]-a[1]);
@@ -753,8 +782,8 @@ function buildPdfHTML(){
         </div>
         <div style="margin-top:40px;display:flex;gap:32px;font-size:13px;flex-wrap:wrap">
           <div><div style="opacity:.7;margin-bottom:4px">応募総数</div><div style="font-size:28px;font-weight:700">${total}<span style="font-size:14px;font-weight:400">名</span></div></div>
-          <div><div style="opacity:.7;margin-bottom:4px">内定者数</div><div style="font-size:28px;font-weight:700">${winners.length}<span style="font-size:14px;font-weight:400">名</span></div></div>
           <div><div style="opacity:.7;margin-bottom:4px">内定承諾者数</div><div style="font-size:28px;font-weight:700">${winnersAccepted.length}<span style="font-size:14px;font-weight:400">名</span></div></div>
+          <div><div style="opacity:.7;margin-bottom:4px">うちKOREC経由</div><div style="font-size:28px;font-weight:700;color:#a7f3d0">${winnersKorec.length}<span style="font-size:14px;font-weight:400">名</span></div></div>
           <div><div style="opacity:.7;margin-bottom:4px">データ抽出日</div><div style="font-size:16px;font-weight:600;margin-top:8px">${today}</div></div>
         </div>
       </div>
@@ -772,8 +801,8 @@ function buildPdfHTML(){
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px">
         ${[
           ['応募総数', total, '#2563eb'],
-          ['内定者数', winners.length, '#f59e0b'],
           ['内定承諾者数', winnersAccepted.length, '#10b981'],
+          ['うちKOREC経由', winnersKorec.length, '#047857'],
         ].map(([l,n,c]) => `
           <div style="background:#f8fafc;border-left:4px solid ${c};padding:12px 14px;border-radius:4px">
             <div style="font-size:11px;color:#64748b">${l}</div>
@@ -884,6 +913,10 @@ function topKey(obj){
 
 
 function offerCardHTML(r){
+  // KOREC経由/以外のバッジ
+  let offerBadge = '';
+  if (hasKorecOffer(r)) offerBadge = `<div style="background:#10b981;color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;margin-right:4px">内定承諾 KOREC経由</div>`;
+  else if (hasExternalOffer(r)) offerBadge = `<div style="background:#94a3b8;color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;margin-right:4px">内定承諾 KOREC以外</div>`;
   const statusColor = {'内定承諾':'#10b981','内定辞退':'#94a3b8','内定':'#f59e0b','最終合格':'#3b82f6'}[r.status] || '#64748b';
   const eduRows = (r._eduList || []).map((e, i) => `
     <tr><td style="padding:3px 6px;color:#64748b;width:80px">${i===0?'最終学歴':'学歴'+(i+1)}</td>
@@ -925,7 +958,10 @@ function offerCardHTML(r){
           <div style="font-size:18px;font-weight:700;color:#2563eb">${r._anonId}</div>
           <div style="font-size:11px;color:#64748b">${esc(r.gender||'-')} / ${esc(r.age||'-')}歳 / ${esc(r.region||r.country||'-')}</div>
         </div>
-        <div style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600">${esc(r.status)}</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          ${offerBadge}
+          <div style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600">${esc(r.status||'—')}</div>
+        </div>
       </div>
       <table style="width:100%;font-size:10px;border-collapse:collapse">
         ${eduRows}
