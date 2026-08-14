@@ -96,31 +96,9 @@
     .cards{grid-template-columns:repeat(2,1fr)}
     .timeline{grid-template-columns:1fr}
   }
-
-  #gate{position:fixed; inset:0; background:#0b1114; display:flex; align-items:center; justify-content:center; z-index:9999}
-  .gate-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px 30px; width:340px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5)}
-  .gate-card h2{margin:0 0 6px; font-size:18px}
-  .gate-card p{color:var(--sub); font-size:13px; margin:0 0 18px}
-  .gate-card input{width:100%; padding:11px 14px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; color:var(--txt); font-size:15px; margin-bottom:12px}
-  .gate-card input:focus{outline:none; border-color:var(--accent)}
-  .gate-card button{width:100%; padding:11px; background:var(--accent); color:#0b1114; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer}
-  .gate-card button:disabled{opacity:.5; cursor:wait}
-  #gate-err{color:var(--bad); font-size:12px; margin-top:10px; min-height:16px}
-  .gate-note{color:var(--muted); font-size:11px; margin-top:16px}
 </style>
 </head>
 <body>
-<div id="gate">
-  <div class="gate-card">
-    <h2>🔒 新入社員モニタリング</h2>
-    <p>閲覧にはパスワードが必要です<br>株式会社ボイス</p>
-    <input id="gate-pw" type="password" placeholder="パスワード" autocomplete="current-password">
-    <button id="gate-btn">表示する</button>
-    <div id="gate-err"></div>
-    <div class="gate-note">経営陣・育成担当 閲覧用。データはパスワードで暗号化されています。</div>
-  </div>
-</div>
-
 <div class="wrap">
 
 <header class="top">
@@ -175,22 +153,11 @@
 </div>
 
 <script>
-let MEMBERS, ROWS, META_UPDATED;
-const ENC = {"salt":"b7EA5yJ2QdR9AFLZ93hq8g==","iv":"xfiim5bLfLraFok1","iter":200000,"ct":"MA8d74E6z7NV3k1hHHTeIxtpuJNa8ekaSvw0G1VpolYirVMgHDYRdkltP1C/M61qH+qJ87JiSU+rE/4Z5pJQM5c7TG4MPdTlUdUl92M3QFGz1Z7PTPkfxL2RQf4fWAYxRTjF5RQL+Np3/5r4zchhDlG6MLMGpmLQAz7Gct4SZxNjNxiw+bGq2n8IHNcFjxpxQtLP9nqzg6pNN0I9Vwu/HAWuVlTAeaU1ZQsoW7XnP6qmkT9OUdJbKnpH8MqOXB/RC0vEKLMlgyEHKcx7yucciAFLAeTxkYlO6xxXRMtmZLm/5JfcbcwKeujbqbt7orFlddy6XIgbnSezIsCS3VX/CyZb7ckbpIY59NFEUTBmZf1E0wYS0OiG0jbBALKDojFQEdFe9liBcnX9Uhe5pXzAyTuj2NDFgj8T5imA9LK7nQmiRZruKiU+YEnPRlvSYfj1y1iaaf6pgsKu1t7J4fz17Ke+yJh7QlqUeFt2Cjr/Efh5IC6x88WiHk2f/qxShPWNWukE4batuM1WUmTUjOC3CzCJ1SruGWuuPUvCVYf+KLuoxZwKOsTIqoEHZKem3DzP22/2icP+pR/tw3ncn4I8zsh0DKesTKx09IzMFArZhqqCD+Vz63Fh5SgwJJhf9n82AcRCMkHDmEULZ+gvIHsRMuh0Spe3GvG3U6Sl+OGJL4b00SXzoyqcp9vPY4onc3p9vBfAqckyQOd+zLbaGqzvYfpDhEV1JkA/qXeRf14yfD377tbqX9iB+NvZ778chUfPLc/W8W/IXzS0aIAKN70M9GQ+pDm/2xD4id65U2d1lJ9BfPqVV5Gep5hL3QIGuhQ4c4M="};
-
-const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-async function decryptData(pw){
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt:b64ToBytes(ENC.salt), iterations:ENC.iter, hash:'SHA-256'},
-    baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
-  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(ENC.iv)}, key, b64ToBytes(ENC.ct));
-  return JSON.parse(new TextDecoder().decode(pt));
-}
-
-function __renderAll(){
-
+/*__DATA_START__*/
+const MEMBERS = ["中山", "中川", "鈴木", "田中", "横山"];
+const ROWS = [{"d": "2026/8/6", "m": "鈴木", "mot": 4, "gro": 4, "cond": 2, "note": "今週は休みをいただいておりましたのであまり業務をできておりませんが、今の作業はとても楽しいです。", "consult": ""}, {"d": "2026/8/6", "m": "中山", "mot": 5, "gro": 5, "cond": 5, "note": "まだまだ力不足を感じるので、出来るだけ自分が成長できるように頑張っていこうと考えている。", "consult": ""}, {"d": "2026/8/6", "m": "田中", "mot": 4, "gro": 4, "cond": 4, "note": "1ヶ月経ったのにまだ慣れないことが多すぎる。早く慣れたい。", "consult": ""}, {"d": "2026/8/6", "m": "横山", "mot": 4, "gro": 3, "cond": 4, "note": "先週からは、現在OJTの課題で取り組んでいる、オセロ制作のクラス図を考え、現在はログイン機能の実装と、SQL文、DBからデータを取ってくる方法は、自動的か手動的かの2つのやり方があることを学びました。 クラス図の作成を通して、それぞれのクラスの役割や関係性などについて、理解を深めることができました。 ですが、各クラスに必要な処理が理解できても、その処理をどのようにコードとして書いていくのかが分からない状態なので、参考コードとして用意されている内容を調べながら、進めています。 自宅では買った入門書を読みながら、実際にコードなどを書きながら、基礎から学んでいるので、連休中に小さいアプリを作成して、各処理の書き方や流れについて、理解を深めて行きたいと思います。", "consult": ""}, {"d": "2026/8/13", "m": "中川", "mot": 3, "gro": 2, "cond": 3, "note": "まあまあ。悪くないが良いとも言えません。", "consult": ""}, {"d": "2026/8/13", "m": "田中", "mot": 4, "gro": 4, "cond": 4, "note": "バグ対応にたくさんAIを使用して便利さを感じた。", "consult": ""}, {"d": "2026/8/13", "m": "横山", "mot": 4, "gro": 4, "cond": 4, "note": "今週は、連休中に購入した入門書を読みながら、実際にコードを書いたり、問題を解いたりして学習を進めました。 また、先週に比べて、書かれているコードがどのような流れで処理されているのかを理解できるようになってきました。 一方で、コードを読んでどんな処理をしているのかをイメージできても、それを実際に自分でコードとして書く際に、どのように記述すればよいのか思い浮かばないので、引き続き実際にコードを書くことを繰り返し、覚えていきたいと思います。 また、普通の書き方を理解する前に、OJTで取り組んでいるオセロ作成ではラムダ式を使用しているため、苦戦していますが、理解できたら便利になるので、理解できるように頑張っていきます。", "consult": ""}, {"d": "2026/8/14", "m": "中山", "mot": 5, "gro": 3, "cond": 5, "note": "お盆や、有給奨励日等もあり、今週はあまり出勤が出来なかったので成長実感は少ない。 来週からまた切り替えて仕事に取り組めれば良いと思う。", "consult": ""}];
+const META_UPDATED = "2026/08/14 13:50（回答8件）";
+/*__DATA_END__*/
 
 const METRICS = [
   {key:'mot',  label:'モチベーション', short:'モチベ', color:'#35c4a5'},
@@ -375,29 +342,6 @@ const lineOpts = {responsive:true, maintainAspectRatio:false,
     return `<div class="tl-item ${cls}"><div class="tl-top"><span><span class="who">${r.m}</span>｜${r._w}</span><span class="sc">${scoreStr(r)}</span></div><div class="body">${tags}${body}</div></div>`;
   }).join('') || '<div class="tl-item"><div class="body">記入なし</div></div>';
 })();
-
-}
-
-(function(){
-  const btn = document.getElementById('gate-btn');
-  const pwInput = document.getElementById('gate-pw');
-  const err = document.getElementById('gate-err');
-  async function attempt(){
-    btn.disabled = true; err.textContent = '';
-    try {
-      const data = await decryptData(pwInput.value);
-      MEMBERS = data.members; ROWS = data.rows; META_UPDATED = data.updated;
-      document.getElementById('gate').remove();
-      __renderAll();
-    } catch(e) {
-      err.textContent = 'パスワードが違います';
-      btn.disabled = false; pwInput.select();
-    }
-  }
-  btn.addEventListener('click', attempt);
-  pwInput.addEventListener('keydown', e => { if(e.key==='Enter') attempt(); });
-  pwInput.focus();
-})();
-</script></script>
+</script>
 </body>
 </html>
