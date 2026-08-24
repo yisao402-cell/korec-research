@@ -96,9 +96,31 @@
     .cards{grid-template-columns:repeat(2,1fr)}
     .timeline{grid-template-columns:1fr}
   }
+
+  #gate{position:fixed; inset:0; background:#0b1114; display:flex; align-items:center; justify-content:center; z-index:9999}
+  .gate-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:34px 30px; width:340px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .gate-card h2{margin:0 0 6px; font-size:18px}
+  .gate-card p{color:var(--sub); font-size:13px; margin:0 0 18px}
+  .gate-card input{width:100%; padding:11px 14px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; color:var(--txt); font-size:15px; margin-bottom:12px}
+  .gate-card input:focus{outline:none; border-color:var(--accent)}
+  .gate-card button{width:100%; padding:11px; background:var(--accent); color:#0b1114; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer}
+  .gate-card button:disabled{opacity:.5; cursor:wait}
+  #gate-err{color:var(--bad); font-size:12px; margin-top:10px; min-height:16px}
+  .gate-note{color:var(--muted); font-size:11px; margin-top:16px}
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="gate-card">
+    <h2>🔒 新入社員モニタリング</h2>
+    <p>閲覧にはパスワードが必要です<br>株式会社ボイス</p>
+    <input id="gate-pw" type="password" placeholder="パスワード" autocomplete="current-password">
+    <button id="gate-btn">表示する</button>
+    <div id="gate-err"></div>
+    <div class="gate-note">経営陣・育成担当 閲覧用。データはパスワードで暗号化されています。</div>
+  </div>
+</div>
+
 <div class="wrap">
 
 <header class="top">
@@ -153,11 +175,22 @@
 </div>
 
 <script>
-/*__DATA_START__*/
-const MEMBERS = ["中山", "中川", "鈴木", "田中", "横山"];
-const ROWS = [{"d": "2026/8/6", "m": "鈴木", "mot": 4, "gro": 4, "cond": 2, "note": "今週は休みをいただいておりましたのであまり業務をできておりませんが、今の作業はとても楽しいです。", "consult": ""}, {"d": "2026/8/6", "m": "中山", "mot": 5, "gro": 5, "cond": 5, "note": "まだまだ力不足を感じるので、出来るだけ自分が成長できるように頑張っていこうと考えている。", "consult": ""}, {"d": "2026/8/6", "m": "田中", "mot": 4, "gro": 4, "cond": 4, "note": "1ヶ月経ったのにまだ慣れないことが多すぎる。早く慣れたい。", "consult": ""}, {"d": "2026/8/6", "m": "横山", "mot": 4, "gro": 3, "cond": 4, "note": "先週からは、現在OJTの課題で取り組んでいる、オセロ制作のクラス図を考え、現在はログイン機能の実装と、SQL文、DBからデータを取ってくる方法は、自動的か手動的かの2つのやり方があることを学びました。 クラス図の作成を通して、それぞれのクラスの役割や関係性などについて、理解を深めることができました。 ですが、各クラスに必要な処理が理解できても、その処理をどのようにコードとして書いていくのかが分からない状態なので、参考コードとして用意されている内容を調べながら、進めています。 自宅では買った入門書を読みながら、実際にコードなどを書きながら、基礎から学んでいるので、連休中に小さいアプリを作成して、各処理の書き方や流れについて、理解を深めて行きたいと思います。", "consult": ""}, {"d": "2026/8/13", "m": "中川", "mot": 3, "gro": 2, "cond": 3, "note": "まあまあ。悪くないが良いとも言えません。", "consult": ""}, {"d": "2026/8/13", "m": "田中", "mot": 4, "gro": 4, "cond": 4, "note": "バグ対応にたくさんAIを使用して便利さを感じた。", "consult": ""}, {"d": "2026/8/13", "m": "横山", "mot": 4, "gro": 4, "cond": 4, "note": "今週は、連休中に購入した入門書を読みながら、実際にコードを書いたり、問題を解いたりして学習を進めました。 また、先週に比べて、書かれているコードがどのような流れで処理されているのかを理解できるようになってきました。 一方で、コードを読んでどんな処理をしているのかをイメージできても、それを実際に自分でコードとして書く際に、どのように記述すればよいのか思い浮かばないので、引き続き実際にコードを書くことを繰り返し、覚えていきたいと思います。 また、普通の書き方を理解する前に、OJTで取り組んでいるオセロ作成ではラムダ式を使用しているため、苦戦していますが、理解できたら便利になるので、理解できるように頑張っていきます。", "consult": ""}, {"d": "2026/8/14", "m": "中山", "mot": 5, "gro": 3, "cond": 5, "note": "お盆や、有給奨励日等もあり、今週はあまり出勤が出来なかったので成長実感は少ない。 来週からまた切り替えて仕事に取り組めれば良いと思う。", "consult": ""}, {"d": "2026/8/17", "m": "鈴木", "mot": 4, "gro": 3, "cond": 3, "note": "今週は仕事量が少なく、着実に向き合うことができた", "consult": ""}, {"d": "2026/8/20", "m": "田中", "mot": 4, "gro": 4, "cond": 4, "note": "1週間かけて実装したけど流石に遅すぎたかもしれない", "consult": ""}, {"d": "2026/8/20", "m": "中川", "mot": 2, "gro": 3, "cond": 4, "note": "揺るぎない。最近の人生には浮き沈みが絶えなかった。しかも、私は粘り強く歩み続ける", "consult": ""}, {"d": "2026/8/20", "m": "鈴木", "mot": 3, "gro": 3, "cond": 2, "note": "今週は不調期間が長いので集中しづらかったです", "consult": ""}, {"d": "2026/8/20", "m": "中山", "mot": 4, "gro": 5, "cond": 4, "note": "単純作業が多く、なかなか成長実感みたいな部分だと難しかった。しかし、こういった確認作業は、自分的には苦手な反面どこの現場でも避けては通れないものだと思うので今のうちに慣れていきたいと考えている。", "consult": ""}, {"d": "2026/8/20", "m": "横山", "mot": 4, "gro": 4, "cond": 4, "note": "今週はOJTの課題に取り組んでいる中で、クラスの関係性の理解度が足りないなと感じ、自宅学習の間に実際にAIに、クラスを作ってif文やfor文、配列などを使って解く問題を出してもらいながら、利害度を深めるために学習を進めて行きました。 コードを読むことや、フロントを受け取った値をもとに、DBの方から一致するものを取ってきて返す流れは、始めの頃よりも少しずつですが、スムーズにできるようになってきています。 ですが、まだDBから必要なカラムが何かや、処理の流れをイメージするのに苦戦する部分もあるので、引き続き自宅学習を通しながら、学んでいこうと思います。 また、初めて行う機能の実装になると、詰まってしまうので、一旦どういう処理が必要なのかを、言語化していきながら、一つひとつコードの方に落としこんでいけたらなと思いました。 まだロジカル的に考えられていない部分や、逆に難しく考えすぎてしまっている部分もあるので、考え方の知識も身に付けていこうと思います。 少しずつ知識が増えていくことで、考える際に余裕ができてきて、今までは気づかなかった部分や、疑問を持てるようになってきたので、一つひとつ疑問に思った部分を解決しながら、成長していけるように頑張っていきます。", "consult": ""}];
-const META_UPDATED = "2026/08/24 11:44（回答14件）";
-/*__DATA_END__*/
+let MEMBERS, ROWS, META_UPDATED;
+const ENC = {"salt":"S8mUHESsfiTCslOt7WW+qA==","iv":"SZ1zER6yIxyDduwI","iter":200000,"ct":"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"};
+
+const b64ToBytes = (b64) => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+async function decryptData(pw){
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:b64ToBytes(ENC.salt), iterations:ENC.iter, hash:'SHA-256'},
+    baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBytes(ENC.iv)}, key, b64ToBytes(ENC.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+function __renderAll(){
+
 
 const METRICS = [
   {key:'mot',  label:'モチベーション', short:'モチベ', color:'#35c4a5'},
@@ -344,6 +377,29 @@ const lineOpts = {responsive:true, maintainAspectRatio:false,
     return `<div class="tl-item ${cls}"><div class="tl-top"><span><span class="who">${r.m}</span>｜${r._w}</span><span class="sc">${scoreStr(r)}</span></div><div class="body">${tags}${body}</div></div>`;
   }).join('') || '<div class="tl-item"><div class="body">記入なし</div></div>';
 })();
-</script>
+
+}
+
+(function(){
+  const btn = document.getElementById('gate-btn');
+  const pwInput = document.getElementById('gate-pw');
+  const err = document.getElementById('gate-err');
+  async function attempt(){
+    btn.disabled = true; err.textContent = '';
+    try {
+      const data = await decryptData(pwInput.value);
+      MEMBERS = data.members; ROWS = data.rows; META_UPDATED = data.updated;
+      document.getElementById('gate').remove();
+      __renderAll();
+    } catch(e) {
+      err.textContent = 'パスワードが違います';
+      btn.disabled = false; pwInput.select();
+    }
+  }
+  btn.addEventListener('click', attempt);
+  pwInput.addEventListener('keydown', e => { if(e.key==='Enter') attempt(); });
+  pwInput.focus();
+})();
+</script></script>
 </body>
 </html>
